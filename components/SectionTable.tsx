@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Section, BusName, DailyChanges, ChangeState, Student } from '@/types';
+import type { Section, BusName, DailyChanges, ChangeState, Student, StudentCategory, CategoryStore } from '@/types';
 import { PICKUP_SECTIONS } from '@/types';
 import StudentRow from './StudentRow';
 import AddStudentModal from './AddStudentModal';
@@ -12,12 +12,17 @@ interface Props {
   bus: BusName;
   changes: DailyChanges;
   tempStudents: Student[];
+  categoryStore: CategoryStore;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
+  onSetCategory: (studentName: string, category: StudentCategory) => void;
 }
 
-export default function SectionTable({ section, bus, changes, tempStudents, onToggle, onDelete, onAddTemp }: Props) {
+export default function SectionTable({
+  section, bus, changes, tempStudents, categoryStore,
+  onToggle, onDelete, onAddTemp, onSetCategory,
+}: Props) {
   const [showModal, setShowModal] = useState(false);
 
   const isPickup = PICKUP_SECTIONS.includes(section.name);
@@ -39,8 +44,9 @@ export default function SectionTable({ section, bus, changes, tempStudents, onTo
               <th className="px-3 py-2 text-left font-medium w-20">시간</th>
               <th className="px-3 py-2 text-left font-medium w-28">장소</th>
               <th className="px-3 py-2 text-left font-medium">아동명</th>
-              <th className="px-3 py-2 text-center font-medium w-10">특이사항</th>
-              <th className="px-3 py-2 text-left font-medium w-40">액션</th>
+              <th className="px-3 py-2 text-center font-medium w-10">특이</th>
+              <th className="px-3 py-2 text-left font-medium w-28">구분</th>
+              <th className="px-3 py-2 text-left font-medium w-44">액션</th>
             </tr>
           </thead>
           <tbody>
@@ -59,15 +65,17 @@ export default function SectionTable({ section, bus, changes, tempStudents, onTo
                   section={section.name}
                   changeState={changeState}
                   isIndivStudent={bus === '개별'}
+                  categoryStore={categoryStore}
                   onToggle={onToggle}
                   onDelete={(id, isTemp) => onDelete(id, isTemp, bus, section.name)}
+                  onSetCategory={onSetCategory}
                   changeKey={key}
                 />
               );
             })}
             {allStudents.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-center text-gray-400 text-xs">
+                <td colSpan={6} className="px-3 py-4 text-center text-gray-400 text-xs">
                   오늘 해당 학생이 없습니다.
                 </td>
               </tr>

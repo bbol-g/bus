@@ -1,17 +1,30 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BusName, ChangeState, DailyChanges, ShuttleBase, Student } from '@/types';
+import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES } from '@/types';
-import { getTodayKorean } from '@/lib/dateUtils';
-import { loadTodayChanges, makeChangeKey, saveTodayChanges } from '@/lib/storage';
+import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
+import {
+  loadCategories, loadTodayChanges, makeChangeKey,
+  saveBase, saveCategories, saveTodayChanges, setStudentCategory,
+} from '@/lib/storage';
 import HoTab from './HoTab';
-import SummaryBar from './SummaryBar';
+import DropoffBoard from './DropoffBoard';
 import { parseExcelFile } from '@/lib/excelParser';
-import { saveBase } from '@/lib/storage';
 
-const ALL_TAB = '전체';
-type TabType = typeof ALL_TAB | BusName;
+type AppMode = 'dropoff' | 'manage';
+type ManageTab = '전체' | BusName;
+
+const CATEGORY_FILTERS: CategoryFilter[] = ['전체', 'MK', 'AK', '초등'];
+const MANAGE_TABS: ManageTab[] = ['전체', ...BUS_NAMES];
+
+const CATEGORY_ACTIVE_STYLE: Record<string, string> = {
+  '전체': 'bg-gray-800 text-white',
+  'MK': 'bg-purple-600 text-white',
+  'AK': 'bg-orange-500 text-white',
+  '초등': 'bg-teal-600 text-white',
+};
+const CATEGORY_INACTIVE_STYLE = 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50';
 
 interface Props {
   data: ShuttleBase;
@@ -19,10 +32,12 @@ interface Props {
 }
 
 export default function Dashboard({ data, onReupload }: Props) {
-  const [activeTab, setActiveTab] = useState<TabType>(ALL_TAB);
+  const [mode, setMode] = useState<AppMode>('dropoff');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
+  const [manageTab, setManageTab] = useState<ManageTab>('전체');
   const [changes, setChanges] = useState<DailyChanges>({});
-  // tempStudents: { [`${bus}_${section}`]: Student[] }
   const [tempStudents, setTempStudents] = useState<Record<string, Student[]>>({});
+  const [categoryStore, setCategoryStore] = useState<CategoryStore>({});
   const today = getTodayKorean();
   const fileRef = useRef<HTMLInputElement>(null);
   const [reuploadLoading, setReuploadLoading] = useState(false);
@@ -30,7 +45,8 @@ export default function Dashboard({ data, onReupload }: Props) {
   useEffect(() => {
     const loaded = loadTodayChanges();
     setChanges(loaded);
-    // Extract temp students from changes
+    setCategoryStore(loadCategories());
+
     const temps: Record<string, Student[]> = {};
     for (const [key, value] of Object.entries(loaded)) {
       if (typeof value === 'object' && value !== null && 'isTemp' in value) {
@@ -70,17 +86,15 @@ export default function Dashboard({ data, onReupload }: Props) {
 
   function handleDelete(studentId: string, isTemp: boolean, bus: BusName, section: string) {
     if (isTemp) {
-      // Remove temp student from tempStudents + changes
       const mapKey = `${bus}_${section}`;
-      setTempStudents((prev) => {
-        const list = (prev[mapKey] ?? []).filter((s) => s.id !== studentId);
-        return { ...prev, [mapKey]: list };
-      });
+      setTempStudents((prev) => ({
+        ...prev,
+        [mapKey]: (prev[mapKey] ?? []).filter((s) => s.id !== studentId),
+      }));
       const next = { ...changes };
-      delete next[studentId]; // temp key is stored by id
+      delete next[studentId];
       persistChanges(next);
     } else {
-      // Mark base student as absent
       const key = makeChangeKey(bus, section, studentId);
       handleToggle(key, 'absent');
     }
@@ -107,12 +121,17 @@ export default function Dashboard({ data, onReupload }: Props) {
       ...prev,
       [mapKey]: [...(prev[mapKey] ?? []), newStudent],
     }));
-    // Save temp student data in changes under its id
     const next = {
       ...changes,
       [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section, id },
     };
     persistChanges(next as DailyChanges);
+  }
+
+  function handleSetCategory(studentName: string, category: StudentCategory) {
+    const next = setStudentCategory(categoryStore, studentName, category);
+    setCategoryStore(next);
+    saveCategories(next);
   }
 
   async function handleReupload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -132,15 +151,10 @@ export default function Dashboard({ data, onReupload }: Props) {
     }
   }
 
-  const tabs: TabType[] = [ALL_TAB, ...BUS_NAMES];
   const displayedBuses =
-    activeTab === ALL_TAB
+    manageTab === '전체'
       ? data.buses
-      : data.buses.filter((b) => b.name === activeTab);
-
-  function handlePrint() {
-    window.print();
-  }
+      : data.buses.filter((b) => b.name === manageTab);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -148,11 +162,14 @@ export default function Dashboard({ data, onReupload }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-4 print:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xl">🚌</span>
-          <span className="font-bold text-gray-800">셔틀버스 대시보드</span>
+          <div>
+            <span className="font-bold text-gray-800">셔틀버스 대시보드</span>
+            <span className="ml-3 text-sm text-gray-500">{formatDate(getTodayString())}</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
           >
             인쇄
@@ -167,62 +184,118 @@ export default function Dashboard({ data, onReupload }: Props) {
         </div>
       </div>
 
-      {/* Summary bar */}
-      <div className="print:hidden">
-        <SummaryBar buses={data.buses} changes={changes} />
-      </div>
-
-      {/* Tabs */}
+      {/* Mode tabs */}
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
-        <div className="flex gap-0 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                activeTab === tab
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="flex">
+          <button
+            onClick={() => setMode('dropoff')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              mode === 'dropoff' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            하원 명단
+          </button>
+          <button
+            onClick={() => setMode('manage')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              mode === 'manage' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            버스 관리
+          </button>
         </div>
       </div>
 
-      {/* Print header */}
-      <div className="hidden print:block px-4 py-2 border-b">
-        <span className="font-bold text-lg">셔틀버스 명단 — {activeTab}</span>
-      </div>
+      {/* ── 하원 명단 mode ── */}
+      {mode === 'dropoff' && (
+        <div className="p-4 max-w-6xl mx-auto">
+          {today === null ? (
+            <div className="text-center text-gray-400 py-16">오늘은 주말입니다. 셔틀 운행이 없습니다.</div>
+          ) : (
+            <>
+              {/* Category filter pills */}
+              <div className="flex gap-2 mb-6 flex-wrap">
+                {CATEGORY_FILTERS.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                      categoryFilter === cat ? CATEGORY_ACTIVE_STYLE[cat] : CATEGORY_INACTIVE_STYLE
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+                {categoryFilter !== '전체' && (
+                  <span className="text-xs text-gray-400 self-center ml-1">
+                    * 구분 미설정 학생은 버스 관리에서 MK/AK/초등 버튼으로 지정하세요
+                  </span>
+                )}
+              </div>
 
-      {/* Content */}
-      <div className="p-4 max-w-5xl mx-auto">
-        {today === null ? (
-          <div className="text-center text-gray-400 py-16">
-            오늘은 주말입니다. 셔틀 운행이 없습니다.
-          </div>
-        ) : (
-          displayedBuses.map((bus) => (
-            <div key={bus.name} className="mb-8">
-              {activeTab === ALL_TAB && (
-                <h2 className="text-base font-bold text-gray-700 mb-3 border-l-4 border-blue-500 pl-3">
-                  {bus.name}
-                </h2>
-              )}
-              <HoTab
-                bus={bus}
-                today={today}
+              <DropoffBoard
+                buses={data.buses}
                 changes={changes}
+                categoryStore={categoryStore}
+                categoryFilter={categoryFilter}
+                today={today}
                 tempStudents={tempStudents}
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-                onAddTemp={handleAddTemp}
               />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── 버스 관리 mode ── */}
+      {mode === 'manage' && (
+        <>
+          {/* Bus sub-tabs */}
+          <div className="bg-white border-b border-gray-200 px-4 print:hidden">
+            <div className="flex gap-0 overflow-x-auto">
+              {MANAGE_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setManageTab(tab)}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                    manageTab === tab
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
-          ))
-        )}
-      </div>
+          </div>
+
+          <div className="p-4 max-w-5xl mx-auto">
+            {today === null ? (
+              <div className="text-center text-gray-400 py-16">오늘은 주말입니다. 셔틀 운행이 없습니다.</div>
+            ) : (
+              displayedBuses.map((bus) => (
+                <div key={bus.name} className="mb-8">
+                  {manageTab === '전체' && (
+                    <h2 className="text-base font-bold text-gray-700 mb-3 border-l-4 border-blue-500 pl-3">
+                      {bus.name}
+                    </h2>
+                  )}
+                  <HoTab
+                    bus={bus}
+                    today={today}
+                    changes={changes}
+                    tempStudents={tempStudents}
+                    categoryStore={categoryStore}
+                    onToggle={handleToggle}
+                    onDelete={handleDelete}
+                    onAddTemp={handleAddTemp}
+                    onSetCategory={handleSetCategory}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
