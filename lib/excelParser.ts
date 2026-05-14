@@ -6,8 +6,14 @@ const BUS_SHEET_NAMES: BusName[] = ['1호차', '2호차', '3호차', '5호차', 
 
 // Excel stores times as fractions of a day (0.375 = 9:00)
 function xlTime(val: unknown): string {
-  if (typeof val === 'number' && val > 0 && val < 1) {
-    const totalMin = Math.round(val * 24 * 60);
+  let n: number | null = null;
+  if (typeof val === 'number') n = val;
+  else if (typeof val === 'string' && val.trim() !== '') {
+    const parsed = parseFloat(val.trim());
+    if (!isNaN(parsed)) n = parsed;
+  }
+  if (n !== null && n > 0 && n < 1) {
+    const totalMin = Math.round(n * 24 * 60);
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return `${h}:${m.toString().padStart(2, '0')}`;
@@ -84,7 +90,7 @@ interface ColMap {
   timeTu: number;  // index of 화목 time column (-1 if none)
 }
 
-function buildColMap(row: unknown[], off: number): ColMap {
+function buildColMap(row: unknown[], off: number, shift = 0): ColMap {
   let time = off, place = off + 1, name = off + 2;
   let day = off + 3, note = off + 5;
   let nameTu = -1, timeTu = -1;
@@ -120,10 +126,18 @@ function buildColMap(row: unknown[], off: number): ColMap {
     day = -1;
   }
 
+  // shift: when column labels are on the same row as the section header, the labels
+  // are at position +1 relative to where the actual data is in data rows
+  const adj = (i: number) => (i >= 0 ? Math.max(0, i - shift) : i);
   return {
     dual,
-    time, place, name, day, note,
-    nameTu, timeTu,
+    time: adj(time),
+    place: adj(place),
+    name: adj(name),
+    day: day >= 0 ? adj(day) : -1,
+    note: adj(note),
+    nameTu: adj(nameTu),
+    timeTu: adj(timeTu),
   };
 }
 
@@ -162,7 +176,10 @@ function parseBusSheet(busName: BusName, rows: unknown[][]): BusData {
     if (sr) {
       if (current) sections.push(current);
       current = { name: sr.section, students: [] };
-      colMap = null;
+      // When column headers appear on the same row as the section name (e.g.
+      // | 9시 30분 등원 | 시간 | 장소 | 요일 | 아동명 |), labels are at off+1
+      // but data rows start at off — so shift all indices by 1.
+      colMap = isHeaderRow(row, off + 1) ? buildColMap(row, off + 1, 1) : null;
       continue;
     }
     if (!current) continue;
@@ -309,7 +326,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
     const num = busName.replace('호차', '');
     const ws = findSheet(wb, [busName, `${num}호차`, `${num}호`]);
     if (!ws) { log.push(`⚠️ ${busName} 시트 없음`); continue; }
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: true });
     const bd = parseBusSheet(busName, rows);
     const total = bd.sections.reduce((s, sec) => s + sec.students.length, 0);
     const detail = bd.sections.filter(s => s.students.length > 0).map(s => `${s.name} ${s.students.length}명`).join(', ');
