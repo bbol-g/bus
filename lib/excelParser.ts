@@ -30,7 +30,7 @@ function isBlank(row: unknown[]): boolean {
 }
 
 function isValidName(s: string): boolean {
-  if (!s || s.length > 25 || s.length < 1) return false;
+  if (!s || s.length > 25 || s.length < 2) return false;
   if (/^\d/.test(s)) return false;  // starts with digit = not a name
   if (/^[0-9:.\s]+$/.test(s)) return false;
   return true;
@@ -64,11 +64,11 @@ function findSection(row: unknown[]): { section: SectionType; col: number } | nu
 
 // Is this a column-header row? (contains student-name or day-pattern headers)
 function isHeaderRow(row: unknown[], off: number): boolean {
-  const NAME_HEADERS = new Set(['아동명', '이름', '학생명', '원생명', '월수금', '화목']);
+  const NAME_HEADERS = new Set(['아동명', '이름', '학생명', '원생명', '월수금', '화목', '월수', '시간', '구분']);
   for (let i = off; i < Math.min(row.length, off + 12); i++) {
     const h = cell(row, i);
     if (NAME_HEADERS.has(h)) return true;
-    if (h.includes('월수금') && h.length < 10) return true;
+    if ((h.includes('월수금') || h.includes('화목')) && h.length < 10) return true;
   }
   return false;
 }
@@ -101,9 +101,9 @@ function buildColMap(row: unknown[], off: number): ColMap {
       place = i;
     } else if (['아동명', '이름', '학생명', '원생명'].includes(h)) {
       name = i;
-    } else if (h === '월수금' || (h.includes('월수금') && h.length < 10)) {
+    } else if (h === '월수금' || (h.includes('월수금') && h.length < 10) || h === '월' || h === '월수') {
       name = i; hasMwf = true;
-    } else if (h === '화목' || (h.includes('화목') && h.length < 10)) {
+    } else if (h === '화목' || (h.includes('화목') && h.length < 10) || h === '화' || h === '목') {
       nameTu = i; hasTuTh = true;
     } else if (h === '요일') {
       day = i;
@@ -112,8 +112,16 @@ function buildColMap(row: unknown[], off: number): ColMap {
     }
   }
 
+  // dual = true whenever there's an explicit 화목 column (hasTuTh)
+  const dual = hasTuTh;
+  // When dual but no explicit 요일 column was found (day defaulted to nameTu position),
+  // use -1 as sentinel so parseBusSheet can default dayMwf to '월수금'
+  if (dual && nameTu >= 0 && day === nameTu) {
+    day = -1;
+  }
+
   return {
-    dual: hasMwf && hasTuTh,
+    dual,
     time, place, name, day, note,
     nameTu, timeTu,
   };
@@ -182,13 +190,14 @@ function parseBusSheet(busName: BusName, rows: unknown[][]): BusData {
       current.students.push(makeStudent(
         busName, current.name, n,
         xlTime(raw(row, colMap.time)), place,
-        cell(row, colMap.day), '', '', note,
+        colMap.day >= 0 ? cell(row, colMap.day) : '', '', '', note,
       ));
     } else {
       // Dual-student row: 월수금 student + 화목 student
       const nMwf = cell(row, colMap.name);
       const nTu = colMap.nameTu >= 0 ? cell(row, colMap.nameTu) : '';
-      const dayMwf = cell(row, colMap.day);
+      // day=-1 means no explicit 요일 column; infer from dual column position
+      const dayMwf = colMap.day >= 0 ? cell(row, colMap.day) : '월수금';
       const tMwf = xlTime(raw(row, colMap.time));
       const tTu = colMap.timeTu >= 0 ? xlTime(raw(row, colMap.timeTu)) : '';
 
