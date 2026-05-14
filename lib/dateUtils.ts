@@ -1,4 +1,4 @@
-import type { DayOfWeek, DayString } from '@/types';
+import type { DayOfWeek } from '@/types';
 
 const DAY_MAP: Record<number, DayOfWeek> = {
   1: '월',
@@ -19,11 +19,12 @@ export function getTodayString(): string {
 
 export function matchesDay(dayValue: string, today: DayOfWeek): boolean {
   if (!dayValue || dayValue.trim() === '') return false;
-  const v = dayValue.trim() as DayString;
-  if (v === '매일') return true;
-  if (v === '월수금') return today === '월' || today === '수' || today === '금';
-  if (v === '화목') return today === '화' || today === '목';
-  return v === today;
+  const v = dayValue.trim();
+  if (v === '매일' || v === '전일' || v === '항상') return true;
+  // Handles any combination: '월수금', '화목', '월수', '월화수금', single chars, etc.
+  const DAY_CHARS: DayOfWeek[] = ['월', '화', '수', '목', '금'];
+  if (DAY_CHARS.some(d => v.includes(d))) return v.includes(today);
+  return false;
 }
 
 export function studentRunsToday(dayMwf: string, dayTuTh: string, today: DayOfWeek): boolean {
