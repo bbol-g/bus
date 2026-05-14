@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #ffffff;
+  color: #171717;
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', Arial, sans-serif;
+}
+
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  body {
+    font-size: 11pt;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 4px 6px;
+  }
+}
