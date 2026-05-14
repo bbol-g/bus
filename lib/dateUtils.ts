@@ -27,6 +27,8 @@ export function matchesDay(dayValue: string, today: DayOfWeek): boolean {
 }
 
 export function studentRunsToday(dayMwf: string, dayTuTh: string, today: DayOfWeek): boolean {
+  // If both day columns are empty, treat as 매일 (every day)
+  if (!dayMwf.trim() && !dayTuTh.trim()) return true;
   return matchesDay(dayMwf, today) || matchesDay(dayTuTh, today);
 }
 

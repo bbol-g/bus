@@ -140,7 +140,13 @@ export default function Dashboard({ data, onReupload }: Props) {
     e.target.value = '';
     setReuploadLoading(true);
     try {
-      const newData = await parseExcelFile(file);
+      const { data: newData, log } = await parseExcelFile(file);
+      const total = newData.buses.reduce((s, b) => s + b.sections.reduce((ss, sec) => ss + sec.students.length, 0), 0);
+      console.log('[재업로드 파싱 결과]', log);
+      if (total === 0) {
+        alert('학생 데이터를 읽지 못했습니다.\n\n' + log.join('\n'));
+        return;
+      }
       saveBase(newData);
       onReupload(newData);
     } catch (err) {

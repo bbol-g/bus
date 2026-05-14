@@ -14,6 +14,7 @@ export default function ExcelUploader({ onUploaded }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [parseLog, setParseLog] = useState<string[]>([]);
 
   async function handleFile(file: File) {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
@@ -21,9 +22,16 @@ export default function ExcelUploader({ onUploaded }: Props) {
       return;
     }
     setError(null);
+    setParseLog([]);
     setLoading(true);
     try {
-      const data = await parseExcelFile(file);
+      const { data, log } = await parseExcelFile(file);
+      setParseLog(log);
+      const total = data.buses.reduce((s, b) => s + b.sections.reduce((ss, sec) => ss + sec.students.length, 0), 0);
+      if (total === 0) {
+        setError('학생 데이터를 읽지 못했습니다. 아래 파싱 로그를 확인해주세요.');
+        return;
+      }
       saveBase(data);
       onUploaded(data);
     } catch (e) {
@@ -49,7 +57,7 @@ export default function ExcelUploader({ onUploaded }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
+      <div className="bg-white rounded-2xl shadow-lg p-10 max-w-lg w-full text-center">
         <div className="text-5xl mb-4">🚌</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">셔틀버스 대시보드</h1>
         <p className="text-gray-500 mb-8 text-sm">
@@ -78,7 +86,18 @@ export default function ExcelUploader({ onUploaded }: Props) {
         </div>
 
         {error && (
-          <div className="text-red-500 text-sm bg-red-50 rounded-lg px-4 py-2 mb-2">{error}</div>
+          <div className="text-red-500 text-sm bg-red-50 rounded-lg px-4 py-2 mb-3">{error}</div>
+        )}
+
+        {parseLog.length > 0 && (
+          <div className="text-left bg-gray-50 rounded-lg px-4 py-3 mb-2 text-xs text-gray-600 space-y-1">
+            <div className="font-semibold text-gray-700 mb-1">파싱 결과</div>
+            {parseLog.map((line, i) => (
+              <div key={i} className={line.startsWith('⚠️') ? 'text-amber-600' : line.startsWith('✅') ? 'text-green-700' : 'text-gray-500'}>
+                {line}
+              </div>
+            ))}
+          </div>
         )}
 
         <input
