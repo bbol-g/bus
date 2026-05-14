@@ -1,8 +1,9 @@
-import type { ShuttleBase, DailyChanges, ChangeState } from '@/types';
+import type { ShuttleBase, DailyChanges, ChangeState, CategoryStore, StudentCategory } from '@/types';
 import { getTodayString } from './dateUtils';
 
 const BASE_KEY = 'shuttleBase';
 const CHANGES_PREFIX = 'shuttleChanges_';
+const CATEGORIES_KEY = 'shuttleCategories';
 
 export function saveBase(data: ShuttleBase): void {
   localStorage.setItem(BASE_KEY, JSON.stringify(data));
@@ -20,6 +21,34 @@ export function loadBase(): ShuttleBase | null {
 
 export function clearBase(): void {
   localStorage.removeItem(BASE_KEY);
+}
+
+export function loadCategories(): CategoryStore {
+  const raw = localStorage.getItem(CATEGORIES_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as CategoryStore;
+  } catch {
+    return {};
+  }
+}
+
+export function saveCategories(cats: CategoryStore): void {
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(cats));
+}
+
+export function setStudentCategory(
+  cats: CategoryStore,
+  studentName: string,
+  category: StudentCategory
+): CategoryStore {
+  const next = { ...cats };
+  if (category === '') {
+    delete next[studentName];
+  } else {
+    next[studentName] = category;
+  }
+  return next;
 }
 
 function changesKey(date: string): string {

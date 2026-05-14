@@ -1,18 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import type { Student, ChangeState, BusName, SectionType } from '@/types';
+import type { Student, ChangeState, BusName, SectionType, StudentCategory, CategoryStore } from '@/types';
 
 interface Props {
   student: Student;
   bus: BusName;
   section: SectionType;
   changeState: ChangeState | null;
-  isIndivStudent: boolean; // from 개별등하원 sheet → can toggle 셔틀
+  isIndivStudent: boolean;
+  categoryStore: CategoryStore;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean) => void;
+  onSetCategory: (studentName: string, category: StudentCategory) => void;
   changeKey: string;
 }
+
+const CATEGORY_ACTIVE: Record<Exclude<StudentCategory, ''>, string> = {
+  MK: 'bg-purple-500 text-white border-purple-500',
+  AK: 'bg-orange-500 text-white border-orange-500',
+  '초등': 'bg-teal-500 text-white border-teal-500',
+};
+const CATEGORY_INACTIVE = 'border-gray-200 text-gray-400 hover:border-gray-400';
 
 function NoteTooltip({ note }: { note: string }) {
   const [visible, setVisible] = useState(false);
@@ -42,13 +51,16 @@ export default function StudentRow({
   student,
   changeState,
   isIndivStudent,
+  categoryStore,
   onToggle,
   onDelete,
+  onSetCategory,
   changeKey,
 }: Props) {
   const isAbsent = changeState === 'absent';
   const isIndividual = changeState === 'individual';
   const isShuttle = changeState === 'shuttle';
+  const currentCategory = categoryStore[student.name] ?? '';
 
   let rowClass = 'hover:bg-gray-50';
   if (isAbsent) rowClass = 'bg-gray-100 opacity-60';
@@ -58,13 +70,14 @@ export default function StudentRow({
   function toggleAbsent() {
     onToggle(changeKey, isAbsent ? null : 'absent');
   }
-
   function toggleIndividual() {
     onToggle(changeKey, isIndividual ? null : 'individual');
   }
-
   function toggleShuttle() {
     onToggle(changeKey, isShuttle ? null : 'shuttle');
+  }
+  function toggleCategory(cat: Exclude<StudentCategory, ''>) {
+    onSetCategory(student.name, currentCategory === cat ? '' : cat);
   }
 
   return (
@@ -89,6 +102,23 @@ export default function StudentRow({
       <td className="px-3 py-2 text-center">
         {student.note ? <NoteTooltip note={student.note} /> : null}
       </td>
+      {/* Category */}
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-1">
+          {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => toggleCategory(cat)}
+              className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors ${
+                currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </td>
+      {/* Actions */}
       <td className="px-3 py-2">
         <div className="flex items-center gap-1 flex-wrap">
           <button

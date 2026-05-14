@@ -13,6 +13,12 @@ export type BusName = '1호차' | '2호차' | '3호차' | '5호차' | '6호차' 
 
 export type ChangeState = 'absent' | 'individual' | 'shuttle';
 
+export type StudentCategory = 'MK' | 'AK' | '초등' | '';
+
+export type CategoryFilter = '전체' | StudentCategory;
+
+export type CategoryStore = Record<string, StudentCategory>; // key: student name
+
 export interface Student {
   id: string;
   name: string;
@@ -26,7 +32,6 @@ export interface Student {
   bus: BusName;
   section: SectionType;
   isTemp?: boolean;
-  // 개별등하원 구분
   type?: '등원_개별' | '하원_개별';
 }
 
@@ -51,3 +56,4 @@ export const PICKUP_SECTIONS: SectionType[] = ['9시 30분 등원', '3시 등원
 export const DROPOFF_SECTIONS: SectionType[] = ['3시 하원', '4시 30분 하원', '6시 하원'];
 export const ALL_SECTIONS: SectionType[] = [...PICKUP_SECTIONS, ...DROPOFF_SECTIONS];
 export const BUS_NAMES: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차', '개별'];
+export const CATEGORY_LABELS: Record<Exclude<StudentCategory, ''>, string> = { MK: 'MK', AK: 'AK', '초등': '초등' };
