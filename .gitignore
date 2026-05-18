@@ -34,3 +34,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# server data (Excel 파싱 결과, 당일 변동사항)
+/.data

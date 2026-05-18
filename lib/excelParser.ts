@@ -239,9 +239,14 @@ function parseIndivSheet(rows: unknown[][]): BusData {
 
 export async function parseExcelFile(file: File): Promise<ShuttleBase> {
   const buffer = await file.arrayBuffer();
-  // cellDates: true → 날짜/시간 셀을 Date 객체로 읽음
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+  return parseWorkbook(XLSX.read(buffer, { type: 'array', cellDates: true }));
+}
 
+export function parseExcelBuffer(buffer: Buffer): ShuttleBase {
+  return parseWorkbook(XLSX.read(buffer, { type: 'buffer', cellDates: true }));
+}
+
+function parseWorkbook(wb: XLSX.WorkBook): ShuttleBase {
   const buses: BusData[] = [];
 
   for (const sheetName of BUS_SHEETS) {
@@ -251,7 +256,6 @@ export async function parseExcelFile(file: File): Promise<ShuttleBase> {
     buses.push(parseBusSheet(sheetName, rows));
   }
 
-  // 개별등하원 시트 (있는 경우만)
   const indivWs = wb.Sheets['개별등하원'];
   if (indivWs) {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(indivWs, { header: 1, defval: '' });
