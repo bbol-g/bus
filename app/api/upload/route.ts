@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const data = parseExcelBuffer(buffer);
-    writeBase(data);
+    await writeBase(data);
     return NextResponse.json(data);
   } catch (e) {
     console.error(e);
