@@ -1,4 +1,4 @@
-import type { DayOfWeek, DayString } from '@/types';
+import type { DayOfWeek } from '@/types';
 
 const DAY_MAP: Record<number, DayOfWeek> = {
   1: '월',
@@ -19,11 +19,10 @@ export function getTodayString(): string {
 
 export function matchesDay(dayValue: string, today: DayOfWeek): boolean {
   if (!dayValue || dayValue.trim() === '') return false;
-  const v = dayValue.trim() as DayString;
+  const v = dayValue.trim();
   if (v === '매일') return true;
-  if (v === '월수금') return today === '월' || today === '수' || today === '금';
-  if (v === '화목') return today === '화' || today === '목';
-  return v === today;
+  // 각 요일 한글자가 포함되는지 확인 (월수금, 화목, 월수, 월화목 등 모든 조합 처리)
+  return v.includes(today);
 }
 
 export function studentRunsToday(dayMwf: string, dayTuTh: string, today: DayOfWeek): boolean {

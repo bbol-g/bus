@@ -32,7 +32,7 @@ interface Props {
 }
 
 export default function Dashboard({ data, onReupload }: Props) {
-  const [mode, setMode] = useState<AppMode>('dropoff');
+  const [mode, setMode] = useState<AppMode>('manage');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
   const [manageTab, setManageTab] = useState<ManageTab>('전체');
   const [changes, setChanges] = useState<DailyChanges>({});

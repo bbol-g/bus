@@ -1,4 +1,4 @@
-export type DayString = '매일' | '월수금' | '화목' | '월' | '화' | '수' | '목' | '금';
+export type DayString = string; // '매일' | '월수금' | '화목' | '월' | '화' | '수' | '목' | '금' | 복합 조합
 export type DayOfWeek = '월' | '화' | '수' | '목' | '금';
 
 export type SectionType =
@@ -9,7 +9,7 @@ export type SectionType =
   | '4시 30분 하원'
   | '6시 하원';
 
-export type BusName = '1호차' | '2호차' | '3호차' | '5호차' | '6호차' | '개별';
+export type BusName = '1호차' | '2호차' | '3호차' | '4호차' | '5호차' | '6호차' | '개별';
 
 export type ChangeState = 'absent' | 'individual' | 'shuttle';
 
@@ -55,5 +55,5 @@ export type DailyChanges = Record<string, ChangeState | { isTemp: true; name: st
 export const PICKUP_SECTIONS: SectionType[] = ['9시 30분 등원', '3시 등원', '4시 30분 등원'];
 export const DROPOFF_SECTIONS: SectionType[] = ['3시 하원', '4시 30분 하원', '6시 하원'];
 export const ALL_SECTIONS: SectionType[] = [...PICKUP_SECTIONS, ...DROPOFF_SECTIONS];
-export const BUS_NAMES: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차', '개별'];
+export const BUS_NAMES: BusName[] = ['1호차', '2호차', '3호차', '4호차', '5호차', '6호차', '개별'];
 export const CATEGORY_LABELS: Record<Exclude<StudentCategory, ''>, string> = { MK: 'MK', AK: 'AK', '초등': '초등' };

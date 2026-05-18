@@ -49,6 +49,7 @@ function NoteTooltip({ note }: { note: string }) {
 
 export default function StudentRow({
   student,
+  section,
   changeState,
   isIndivStudent,
   categoryStore,
@@ -140,7 +141,7 @@ export default function StudentRow({
                   : 'border-gray-300 text-gray-600 hover:bg-yellow-50'
               }`}
             >
-              개별
+              {['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section) ? '개별등원' : '개별하원'}
             </button>
           )}
           {isIndivStudent && (
