@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import type { ShuttleBase } from '@/types';
-import { loadBase } from '@/lib/storage';
 import ExcelUploader from '@/components/ExcelUploader';
 import Dashboard from '@/components/Dashboard';
 
@@ -11,12 +10,22 @@ export default function Home() {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const base = loadBase();
-    setData(base);
-    setChecked(true);
+    fetch('/api/data')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: ShuttleBase | null) => {
+        setData(d);
+        setChecked(true);
+      })
+      .catch(() => setChecked(true));
   }, []);
 
-  if (!checked) return null;
+  if (!checked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">불러오는 중...</div>
+      </div>
+    );
+  }
 
   if (!data) {
     return <ExcelUploader onUploaded={(d) => setData(d)} />;

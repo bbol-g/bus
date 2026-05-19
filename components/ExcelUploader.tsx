@@ -1,8 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { parseExcelFile } from '@/lib/excelParser';
-import { saveBase } from '@/lib/storage';
 import type { ShuttleBase } from '@/types';
 
 interface Props {
@@ -23,12 +21,15 @@ export default function ExcelUploader({ onUploaded }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const data = await parseExcelFile(file);
-      saveBase(data);
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('upload failed');
+      const data = await res.json() as ShuttleBase;
       onUploaded(data);
     } catch (e) {
       console.error(e);
-      setError('파일 파싱에 실패했습니다. 형식을 확인해주세요.');
+      setError('파일 업로드/파싱에 실패했습니다. 형식을 확인해주세요.');
     } finally {
       setLoading(false);
     }

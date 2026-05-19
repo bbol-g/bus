@@ -4,13 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES } from '@/types';
 import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
-import {
-  loadCategories, loadTodayChanges, makeChangeKey,
-  saveBase, saveCategories, saveTodayChanges, setStudentCategory,
-} from '@/lib/storage';
+import { makeChangeKey, setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
-import { parseExcelFile } from '@/lib/excelParser';
 
 type AppMode = 'dropoff' | 'manage';
 type ManageTab = '전체' | BusName;
@@ -32,7 +28,7 @@ interface Props {
 }
 
 export default function Dashboard({ data, onReupload }: Props) {
-  const [mode, setMode] = useState<AppMode>('dropoff');
+  const [mode, setMode] = useState<AppMode>('manage');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
   const [manageTab, setManageTab] = useState<ManageTab>('전체');
   const [changes, setChanges] = useState<DailyChanges>({});
@@ -43,38 +39,49 @@ export default function Dashboard({ data, onReupload }: Props) {
   const [reuploadLoading, setReuploadLoading] = useState(false);
 
   useEffect(() => {
-    const loaded = loadTodayChanges();
-    setChanges(loaded);
-    setCategoryStore(loadCategories());
+    const todayStr = getTodayString();
 
-    const temps: Record<string, Student[]> = {};
-    for (const [key, value] of Object.entries(loaded)) {
-      if (typeof value === 'object' && value !== null && 'isTemp' in value) {
-        const temp = value as { isTemp: true; name: string; place: string; time: string; note: string; bus: BusName; section: string; id: string };
-        const mapKey = `${temp.bus}_${temp.section}`;
-        if (!temps[mapKey]) temps[mapKey] = [];
-        temps[mapKey].push({
-          id: temp.id ?? key,
-          name: temp.name,
-          time: temp.time,
-          place: temp.place,
-          contact: '',
-          note: temp.note,
-          dayMwf: '매일',
-          timeTuTh: '',
-          dayTuTh: '매일',
-          bus: temp.bus as BusName,
-          section: temp.section as Student['section'],
-          isTemp: true,
-        });
+    Promise.all([
+      fetch(`/api/changes?date=${todayStr}`).then((r) => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch('/api/categories').then((r) => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([loaded, cats]: [DailyChanges, CategoryStore]) => {
+      setChanges(loaded);
+      setCategoryStore(cats);
+
+      const temps: Record<string, Student[]> = {};
+      for (const [key, value] of Object.entries(loaded)) {
+        if (typeof value === 'object' && value !== null && 'isTemp' in value) {
+          const temp = value as { isTemp: true; name: string; place: string; time: string; note: string; bus: BusName; section: string; id: string };
+          const mapKey = `${temp.bus}_${temp.section}`;
+          if (!temps[mapKey]) temps[mapKey] = [];
+          temps[mapKey].push({
+            id: temp.id ?? key,
+            name: temp.name,
+            time: temp.time,
+            place: temp.place,
+            contact: '',
+            note: temp.note,
+            dayMwf: '매일',
+            timeTuTh: '',
+            dayTuTh: '매일',
+            bus: temp.bus as BusName,
+            section: temp.section as Student['section'],
+            isTemp: true,
+          });
+        }
       }
-    }
-    setTempStudents(temps);
+      setTempStudents(temps);
+    });
   }, []);
 
   const persistChanges = useCallback((next: DailyChanges) => {
     setChanges(next);
-    saveTodayChanges(next);
+    const date = getTodayString();
+    fetch('/api/changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, changes: next }),
+    }).catch(console.error);
   }, []);
 
   function handleToggle(key: string, state: ChangeState | null) {
@@ -131,7 +138,11 @@ export default function Dashboard({ data, onReupload }: Props) {
   function handleSetCategory(studentName: string, category: StudentCategory) {
     const next = setStudentCategory(categoryStore, studentName, category);
     setCategoryStore(next);
-    saveCategories(next);
+    fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: next }),
+    }).catch(console.error);
   }
 
   async function handleReupload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -140,12 +151,15 @@ export default function Dashboard({ data, onReupload }: Props) {
     e.target.value = '';
     setReuploadLoading(true);
     try {
-      const newData = await parseExcelFile(file);
-      saveBase(newData);
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('upload failed');
+      const newData = await res.json() as ShuttleBase;
       onReupload(newData);
     } catch (err) {
       console.error(err);
-      alert('파일 파싱 실패. 형식을 확인해주세요.');
+      alert('파일 업로드/파싱 실패. 형식을 확인해주세요.');
     } finally {
       setReuploadLoading(false);
     }
