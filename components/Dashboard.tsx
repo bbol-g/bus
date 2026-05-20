@@ -7,7 +7,6 @@ import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
 import { makeChangeKey, setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
-import SummaryBar from './SummaryBar';
 import SearchPanel from './SearchPanel';
 
 type AppMode = 'dropoff' | 'manage';
@@ -202,9 +201,6 @@ export default function Dashboard({ data, onReupload }: Props) {
         </div>
       </div>
 
-      {/* Summary bar */}
-      <SummaryBar buses={data.buses} changes={changes} today={today} />
-
       {/* Mode tabs */}
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
         <div className="flex">
@@ -314,7 +310,7 @@ export default function Dashboard({ data, onReupload }: Props) {
               displayedBuses.map((bus) => (
                 <div key={bus.name} className="mb-8">
                   {manageTab === '전체' && (
-                    <h2 className="text-base font-bold text-gray-700 mb-3 border-l-4 border-blue-500 pl-3">
+                    <h2 className="sticky top-0 z-20 text-base font-bold text-gray-700 mb-3 border-l-4 border-blue-500 pl-3 bg-gray-50 py-2 -mx-4 px-4">
                       {bus.name}
                     </h2>
                   )}
