@@ -16,12 +16,13 @@ interface Props {
   changeKey: string;
 }
 
-const CATEGORY_ACTIVE: Record<Exclude<StudentCategory, ''>, string> = {
-  MK: 'bg-purple-500 text-white border-purple-500',
-  AK: 'bg-orange-500 text-white border-orange-500',
-  '초등': 'bg-teal-500 text-white border-teal-500',
+const CYCLE_ORDER: StudentCategory[] = ['', 'MK', 'AK', '초등'];
+const CATEGORY_BADGE: Record<string, string> = {
+  '': 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200',
+  MK: 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200',
+  AK: 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200',
+  '초등': 'bg-teal-100 text-teal-700 border-teal-300 hover:bg-teal-200',
 };
-const CATEGORY_INACTIVE = 'border-gray-200 text-gray-400 hover:border-gray-400';
 
 function NoteTooltip({ note }: { note: string }) {
   const [visible, setVisible] = useState(false);
@@ -77,8 +78,10 @@ export default function StudentRow({
   function toggleShuttle() {
     onToggle(changeKey, isShuttle ? null : 'shuttle');
   }
-  function toggleCategory(cat: Exclude<StudentCategory, ''>) {
-    onSetCategory(student.name, currentCategory === cat ? '' : cat);
+  function cycleCategory() {
+    const idx = CYCLE_ORDER.indexOf(currentCategory);
+    const next = CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length];
+    onSetCategory(student.name, next);
   }
 
   return (
@@ -105,19 +108,13 @@ export default function StudentRow({
       </td>
       {/* Category */}
       <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
-          {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => toggleCategory(cat)}
-              className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors ${
-                currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={cycleCategory}
+          title="클릭하여 구분 변경 (MK→AK→초등→없음)"
+          className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors ${CATEGORY_BADGE[currentCategory]}`}
+        >
+          {currentCategory || '구분'}
+        </button>
       </td>
       {/* Actions */}
       <td className="px-3 py-2">

@@ -7,6 +7,8 @@ import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
 import { makeChangeKey, setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
+import SummaryBar from './SummaryBar';
+import SearchPanel from './SearchPanel';
 
 type AppMode = 'dropoff' | 'manage';
 type ManageTab = '전체' | BusName;
@@ -183,6 +185,7 @@ export default function Dashboard({ data, onReupload }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <SearchPanel data={data} />
           <button
             onClick={() => window.print()}
             className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
@@ -198,6 +201,9 @@ export default function Dashboard({ data, onReupload }: Props) {
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleReupload} />
         </div>
       </div>
+
+      {/* Summary bar */}
+      <SummaryBar buses={data.buses} changes={changes} today={today} />
 
       {/* Mode tabs */}
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
