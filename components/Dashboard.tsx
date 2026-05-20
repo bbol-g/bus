@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, ShuttleBase, Student, StudentCategory } from '@/types';
-import { BUS_NAMES } from '@/types';
+import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, DayOfWeek, ShuttleBase, Student, StudentCategory } from '@/types';
+import { BUS_NAMES, DAY_OF_WEEK } from '@/types';
 import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
 import { makeChangeKey, setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
@@ -35,6 +35,7 @@ export default function Dashboard({ data, onReupload }: Props) {
   const [tempStudents, setTempStudents] = useState<Record<string, Student[]>>({});
   const [categoryStore, setCategoryStore] = useState<CategoryStore>({});
   const today = getTodayKorean();
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(today);
   const fileRef = useRef<HTMLInputElement>(null);
   const [reuploadLoading, setReuploadLoading] = useState(false);
 
@@ -223,12 +224,30 @@ export default function Dashboard({ data, onReupload }: Props) {
       {/* ── 하원 명단 mode ── */}
       {mode === 'dropoff' && (
         <div className="p-4 max-w-6xl mx-auto">
-          {today === null ? (
-            <div className="text-center text-gray-400 py-16">오늘은 주말입니다. 셔틀 운행이 없습니다.</div>
+          {/* 요일 선택 */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {DAY_OF_WEEK.map((d) => (
+              <button
+                key={d}
+                onClick={() => setSelectedDay(d)}
+                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors border ${
+                  selectedDay === d
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }${today === d ? ' ring-2 ring-indigo-300' : ''}`}
+              >
+                {d}
+                {today === d && <span className="ml-1 text-[10px] opacity-80">오늘</span>}
+              </button>
+            ))}
+          </div>
+
+          {selectedDay === null ? (
+            <div className="text-center text-gray-400 py-16">요일을 선택하세요.</div>
           ) : (
             <>
               {/* Category filter pills */}
-              <div className="flex gap-2 mb-6 flex-wrap">
+              <div className="flex gap-2 mb-4 flex-wrap">
                 {CATEGORY_FILTERS.map((cat) => (
                   <button
                     key={cat}
@@ -252,7 +271,7 @@ export default function Dashboard({ data, onReupload }: Props) {
                 changes={changes}
                 categoryStore={categoryStore}
                 categoryFilter={categoryFilter}
-                today={today}
+                today={selectedDay}
                 tempStudents={tempStudents}
               />
             </>

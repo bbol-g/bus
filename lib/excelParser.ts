@@ -2,8 +2,8 @@ import * as XLSX from 'xlsx';
 import type { BusData, BusName, Section, SectionType, ShuttleBase, Student } from '@/types';
 import { ALL_SECTIONS } from '@/types';
 
-// 호차별 시트 이름 (1~6호차)
-const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '4호차', '5호차', '6호차'];
+// 호차별 시트 이름
+const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
 
 // 실제 엑셀 컬럼 구조 (0-based, A열은 항상 빈칸)
 // A(0)=empty, B(1)=시간(월수금), C(2)=장소, D(3)=이름(월수금), E(4)=요일(월수금),
@@ -58,7 +58,9 @@ function inferTuThDay(dayCol: string, timeCol: string): string {
 }
 
 function isSectionHeader(value: string): SectionType | null {
-  return ALL_SECTIONS.includes(value as SectionType) ? (value as SectionType) : null;
+  // 공백 정규화 후 매칭 (엑셀마다 공백 차이 허용)
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return ALL_SECTIONS.includes(normalized as SectionType) ? (normalized as SectionType) : null;
 }
 
 function generateId(bus: string, section: string, name: string, idx: number): string {
@@ -83,9 +85,10 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     // 완전히 빈 행 건너뜀
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
 
-    // B열(index 1)에서 섹션 헤더 탐지
+    // 섹션 헤더 탐지: B열(index 1) 우선, 없으면 A열(index 0)도 확인
     const col1Str = cellStr(row, 1);
-    const sectionMatch = isSectionHeader(col1Str);
+    const col0Str = cellStr(row, 0);
+    const sectionMatch = isSectionHeader(col1Str) ?? isSectionHeader(col0Str);
 
     if (sectionMatch) {
       if (currentSection) sections.push(currentSection);
