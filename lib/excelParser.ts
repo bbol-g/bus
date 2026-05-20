@@ -57,10 +57,25 @@ function inferTuThDay(dayCol: string, timeCol: string): string {
   return '화목';
 }
 
+// 유니코드 공백(전각·비분리 등) 및 한글 숫자 변형을 정규화
+function normalizeSection(value: string): string {
+  return value
+    .replace(/[   -   　﻿]/g, ' ') // 유니코드 공백 → 일반 공백
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function isSectionHeader(value: string): SectionType | null {
-  // 공백 정규화 후 매칭 (엑셀마다 공백 차이 허용)
-  const normalized = value.trim().replace(/\s+/g, ' ');
-  return ALL_SECTIONS.includes(normalized as SectionType) ? (normalized as SectionType) : null;
+  const normalized = normalizeSection(value);
+  if (ALL_SECTIONS.includes(normalized as SectionType)) return normalized as SectionType;
+
+  // 공백 없이 붙어있는 경우도 허용 (예: "3시하원" → "3시 하원")
+  for (const sec of ALL_SECTIONS) {
+    if (normalizeSection(sec).replace(/\s/g, '') === normalized.replace(/\s/g, '')) {
+      return sec;
+    }
+  }
+  return null;
 }
 
 function generateId(bus: string, section: string, name: string, idx: number): string {
@@ -77,12 +92,10 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   let currentSection: Section | null = null;
   let headerSkip = false;
   let studentIdx = 0;
-  // 이전 행에서 내려온 시간/장소 (비어있는 셀이면 위 값 승계)
   let lastTimeMwf = '';
   let lastPlace = '';
 
   for (const row of rows) {
-    // 완전히 빈 행 건너뜀
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
 
     // 섹션 헤더 탐지: B열(index 1) 우선, 없으면 A열(index 0)도 확인

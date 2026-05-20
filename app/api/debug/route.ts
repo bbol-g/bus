@@ -1,20 +1,27 @@
-import { NextResponse } from 'next/server';
 import { readBase } from '@/lib/serverStorage';
 import type { ShuttleBase } from '@/types';
 
 export async function GET() {
   const raw = await readBase();
-  if (!raw) return NextResponse.json({ error: 'no data' });
+  if (!raw) {
+    return new Response('데이터 없음 — 엑셀을 먼저 업로드하세요.', { status: 404 });
+  }
 
   const data = raw as ShuttleBase;
-  const summary = data.buses.map((bus) => ({
-    bus: bus.name,
-    sections: bus.sections.map((sec) => ({
-      section: sec.name,
-      count: sec.students.length,
-      students: sec.students.map((s) => ({ name: s.name, dayMwf: s.dayMwf, dayTuTh: s.dayTuTh })),
-    })),
-  }));
+  const lines: string[] = [`업로드: ${data.uploadedAt}`, ''];
 
-  return NextResponse.json({ uploadedAt: data.uploadedAt, buses: summary });
+  for (const bus of data.buses) {
+    lines.push(`━━━ ${bus.name} ━━━`);
+    for (const sec of bus.sections) {
+      lines.push(`  [${sec.name}] (${sec.students.length}명)`);
+      for (const s of sec.students) {
+        lines.push(`    ${s.time ?? ''} ${s.name}  (월수금=${s.dayMwf} 화목=${s.dayTuTh})`);
+      }
+    }
+    lines.push('');
+  }
+
+  return new Response(lines.join('\n'), {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }
