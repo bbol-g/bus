@@ -69,12 +69,12 @@ export default function SectionTable({
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-medium w-20">시간</th>
-                  <th className="px-3 py-2 text-left font-medium w-28">장소</th>
+                  <th className="px-3 py-2 text-left font-medium w-14">시간</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left font-medium w-36">장소</th>
                   <th className="px-3 py-2 text-left font-medium">아동명</th>
-                  <th className="px-3 py-2 text-center font-medium w-10">특이</th>
-                  <th className="px-3 py-2 text-left font-medium w-20">구분</th>
-                  <th className="px-3 py-2 text-left font-medium w-44">액션</th>
+                  <th className="px-2 py-2 text-left font-medium w-14">구분</th>
+                  <th className="px-2 py-2 text-left font-medium">액션</th>
+                  <th className="px-2 py-2 text-center font-medium w-8">특이</th>
                 </tr>
               </thead>
               <tbody>
