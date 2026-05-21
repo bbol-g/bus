@@ -66,15 +66,23 @@ export default function SectionTable({
       {open && (
         <>
           <div className="overflow-x-auto border border-t-0 border-gray-200 rounded-b-lg">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-sm table-fixed">
+              <colgroup>
+                <col className="w-14" />                          {/* 시간 */}
+                <col className="hidden sm:table-column w-40" />   {/* 장소 */}
+                <col />                                           {/* 아동명 */}
+                <col className="w-16" />                          {/* 구분 */}
+                <col className="w-48" />                          {/* 액션 */}
+                <col className="w-8" />                           {/* 특이 */}
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-medium w-14">시간</th>
-                  <th className="hidden sm:table-cell px-3 py-2 text-left font-medium w-36">장소</th>
+                  <th className="px-3 py-2 text-left font-medium">시간</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left font-medium">장소</th>
                   <th className="px-3 py-2 text-left font-medium">아동명</th>
-                  <th className="px-2 py-2 text-left font-medium w-14">구분</th>
+                  <th className="px-2 py-2 text-left font-medium">구분</th>
                   <th className="px-2 py-2 text-left font-medium">액션</th>
-                  <th className="px-2 py-2 text-center font-medium w-8">특이</th>
+                  <th className="px-2 py-2 text-center font-medium">특이</th>
                 </tr>
               </thead>
               <tbody>
