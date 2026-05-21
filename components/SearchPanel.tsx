@@ -43,29 +43,47 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
   return { name, entries };
 }
 
-const SECTION_COLOR: Record<string, string> = {
-  '9시 30분 등원': 'bg-blue-50 text-blue-700 border-blue-200',
-  '3시 등원': 'bg-blue-50 text-blue-700 border-blue-200',
-  '4시 30분 등원': 'bg-blue-50 text-blue-700 border-blue-200',
-  '3시 하원': 'bg-green-50 text-green-700 border-green-200',
-  '4시 30분 하원': 'bg-green-50 text-green-700 border-green-200',
-  '6시 하원': 'bg-green-50 text-green-700 border-green-200',
-};
+
+function dayLabelOrder(label: string): number {
+  if (label === '매일') return 0;
+  if (label.includes('월')) return 1;
+  if (label.includes('화')) return 2;
+  if (label.includes('수')) return 3;
+  if (label.includes('목')) return 4;
+  if (label.includes('금')) return 5;
+  return 99;
+}
+
+function formatDayLabel(label: string): string {
+  if (!label || label === '매일') return '매일';
+  if (label.length > 1) return label.split('').join('·');
+  return label + '요일';
+}
 
 function ScheduleModal({ schedule, onClose }: { schedule: StudentSchedule; onClose: () => void }) {
-  const pickups = schedule.entries.filter((e) => PICKUP_SECTIONS.includes(e.section as never));
-  const dropoffs = schedule.entries.filter((e) => !PICKUP_SECTIONS.includes(e.section as never));
+  // 요일 기준으로 그룹핑
+  const dayGroups = new Map<string, Entry[]>();
+  for (const e of schedule.entries) {
+    const dayLabel = e.dayMwf || e.dayTuTh || '매일';
+    if (!dayGroups.has(dayLabel)) dayGroups.set(dayLabel, []);
+    dayGroups.get(dayLabel)!.push(e);
+  }
+
+  const sortedDays = Array.from(dayGroups.keys()).sort(
+    (a, b) => dayLabelOrder(a) - dayLabelOrder(b)
+  );
 
   function EntryRow({ e }: { e: Entry }) {
-    const colorClass = SECTION_COLOR[e.section] ?? 'bg-gray-50 text-gray-700 border-gray-200';
+    const isPickup = PICKUP_SECTIONS.includes(e.section as never);
+    const typeLabel = isPickup ? '등원' : '하원';
+    const typeColor = isPickup ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700';
     return (
-      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-sm ${colorClass}`}>
-        <span className="font-semibold whitespace-nowrap">{e.section}</span>
-        <span className="text-xs opacity-70 whitespace-nowrap">{e.bus}</span>
-        <span className="font-mono whitespace-nowrap">{e.time}</span>
-        <span className="truncate opacity-80">{e.place}</span>
-        {e.dayMwf && <span className="ml-auto text-xs opacity-60 whitespace-nowrap shrink-0">{e.dayMwf}</span>}
-        {e.dayTuTh && !e.dayMwf && <span className="ml-auto text-xs opacity-60 whitespace-nowrap shrink-0">{e.dayTuTh}</span>}
+      <div className="flex items-center gap-2 py-1.5 text-sm">
+        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded shrink-0 ${typeColor}`}>{typeLabel}</span>
+        <span className="font-medium whitespace-nowrap text-gray-800">{e.section}</span>
+        <span className="text-xs text-gray-400 whitespace-nowrap">{e.bus}</span>
+        {e.time && <span className="font-mono text-xs text-gray-500 whitespace-nowrap">{e.time}</span>}
+        <span className="truncate text-xs text-gray-400">{e.place}</span>
       </div>
     );
   }
@@ -81,20 +99,29 @@ function ScheduleModal({ schedule, onClose }: { schedule: StudentSchedule; onClo
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
         </div>
         <div className="px-5 py-4 flex flex-col gap-4">
-          {pickups.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-blue-600 mb-2 uppercase tracking-wide">등원</div>
-              <div className="flex flex-col gap-1.5">{pickups.map((e, i) => <EntryRow key={i} e={e} />)}</div>
-            </div>
-          )}
-          {dropoffs.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-green-600 mb-2 uppercase tracking-wide">하원</div>
-              <div className="flex flex-col gap-1.5">{dropoffs.map((e, i) => <EntryRow key={i} e={e} />)}</div>
-            </div>
-          )}
-          {schedule.entries.length === 0 && (
+          {schedule.entries.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">배치 정보 없음</p>
+          ) : (
+            sortedDays.map((dayLabel) => {
+              const entries = dayGroups.get(dayLabel)!;
+              const sorted = [...entries].sort((a, b) => {
+                const aP = PICKUP_SECTIONS.includes(a.section as never) ? 0 : 1;
+                const bP = PICKUP_SECTIONS.includes(b.section as never) ? 0 : 1;
+                return aP - bP;
+              });
+              return (
+                <div key={dayLabel}>
+                  <div className="mb-1.5">
+                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                      {formatDayLabel(dayLabel)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col divide-y divide-gray-50 pl-1 border-l-2 border-gray-100 ml-1">
+                    {sorted.map((e, i) => <EntryRow key={i} e={e} />)}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
