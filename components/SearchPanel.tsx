@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import type { ShuttleBase } from '@/types';
-import { PICKUP_SECTIONS } from '@/types';
+import type { DayOfWeek, ShuttleBase } from '@/types';
+import { DAY_OF_WEEK, PICKUP_SECTIONS } from '@/types';
+import { matchesDay } from '@/lib/dateUtils';
 
 interface Entry {
   bus: string;
@@ -44,34 +45,47 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
 }
 
 
-function dayLabelOrder(label: string): number {
-  if (label === '매일') return 0;
-  if (label.includes('월')) return 1;
-  if (label.includes('화')) return 2;
-  if (label.includes('수')) return 3;
-  if (label.includes('목')) return 4;
-  if (label.includes('금')) return 5;
-  return 99;
+function entrySig(entries: Entry[]): string {
+  return [...entries]
+    .map(e => `${e.section}|${e.bus}|${e.time}|${e.place}`)
+    .sort()
+    .join(';;');
 }
 
-function formatDayLabel(label: string): string {
-  if (!label || label === '매일') return '매일';
-  if (label.length > 1) return label.split('').join('·');
-  return label + '요일';
+function sortEntries(entries: Entry[]): Entry[] {
+  return [...entries].sort((a, b) => {
+    const aP = PICKUP_SECTIONS.includes(a.section as never) ? 0 : 1;
+    const bP = PICKUP_SECTIONS.includes(b.section as never) ? 0 : 1;
+    return aP - bP;
+  });
+}
+
+function formatGroupLabel(days: DayOfWeek[]): string {
+  if (days.length === 5) return '매일';
+  if (days.length === 1) return days[0] + '요일';
+  return days.join('·');
 }
 
 function ScheduleModal({ schedule, onClose }: { schedule: StudentSchedule; onClose: () => void }) {
-  // 요일 기준으로 그룹핑
-  const dayGroups = new Map<string, Entry[]>();
-  for (const e of schedule.entries) {
-    const dayLabel = e.dayMwf || e.dayTuTh || '매일';
-    if (!dayGroups.has(dayLabel)) dayGroups.set(dayLabel, []);
-    dayGroups.get(dayLabel)!.push(e);
-  }
+  // 각 요일(월~금)별로 해당 entry 계산
+  const perDay = DAY_OF_WEEK.map(day => ({
+    day,
+    entries: schedule.entries.filter(e =>
+      matchesDay(e.dayMwf, day) || matchesDay(e.dayTuTh, day)
+    ),
+  })).filter(({ entries }) => entries.length > 0);
 
-  const sortedDays = Array.from(dayGroups.keys()).sort(
-    (a, b) => dayLabelOrder(a) - dayLabelOrder(b)
-  );
+  // 동일 스케줄인 요일끼리 묶기
+  const groups: { days: DayOfWeek[]; entries: Entry[] }[] = [];
+  for (const { day, entries } of perDay) {
+    const sig = entrySig(entries);
+    const existing = groups.find(g => entrySig(g.entries) === sig);
+    if (existing) {
+      existing.days.push(day);
+    } else {
+      groups.push({ days: [day], entries });
+    }
+  }
 
   function EntryRow({ e }: { e: Entry }) {
     const isPickup = PICKUP_SECTIONS.includes(e.section as never);
@@ -99,29 +113,21 @@ function ScheduleModal({ schedule, onClose }: { schedule: StudentSchedule; onClo
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
         </div>
         <div className="px-5 py-4 flex flex-col gap-4">
-          {schedule.entries.length === 0 ? (
+          {groups.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">배치 정보 없음</p>
           ) : (
-            sortedDays.map((dayLabel) => {
-              const entries = dayGroups.get(dayLabel)!;
-              const sorted = [...entries].sort((a, b) => {
-                const aP = PICKUP_SECTIONS.includes(a.section as never) ? 0 : 1;
-                const bP = PICKUP_SECTIONS.includes(b.section as never) ? 0 : 1;
-                return aP - bP;
-              });
-              return (
-                <div key={dayLabel}>
-                  <div className="mb-1.5">
-                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
-                      {formatDayLabel(dayLabel)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col divide-y divide-gray-50 pl-1 border-l-2 border-gray-100 ml-1">
-                    {sorted.map((e, i) => <EntryRow key={i} e={e} />)}
-                  </div>
+            groups.map((g) => (
+              <div key={g.days.join('')}>
+                <div className="mb-1.5">
+                  <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                    {formatGroupLabel(g.days)}
+                  </span>
                 </div>
-              );
-            })
+                <div className="flex flex-col divide-y divide-gray-50 pl-1 border-l-2 border-gray-100 ml-1">
+                  {sortEntries(g.entries).map((e, i) => <EntryRow key={i} e={e} />)}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
