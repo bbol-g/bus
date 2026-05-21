@@ -39,9 +39,9 @@ function NoteTooltip({ note }: { note: string }) {
         ⚠️
       </button>
       {visible && (
-        <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap max-w-xs">
+        <div className="absolute z-30 bottom-full right-0 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap max-w-xs">
           {note}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+          <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-800" />
         </div>
       )}
     </div>
@@ -69,85 +69,74 @@ export default function StudentRow({
   else if (isIndividual) rowClass = 'bg-yellow-50';
   else if (isShuttle) rowClass = 'bg-blue-50';
 
-  function toggleAbsent() {
-    onToggle(changeKey, isAbsent ? null : 'absent');
-  }
-  function toggleIndividual() {
-    onToggle(changeKey, isIndividual ? null : 'individual');
-  }
-  function toggleShuttle() {
-    onToggle(changeKey, isShuttle ? null : 'shuttle');
-  }
   function cycleCategory() {
     const idx = CYCLE_ORDER.indexOf(currentCategory);
-    const next = CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length];
-    onSetCategory(student.name, next);
+    onSetCategory(student.name, CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length]);
   }
+
+  const isPickupSection = ['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section);
 
   return (
     <tr className={`${rowClass} border-b border-gray-100 transition-colors`}>
-      <td className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">{student.time}</td>
-      <td className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">{student.place}</td>
-      <td className="px-3 py-2 text-sm font-medium whitespace-nowrap">
-        <span className={isAbsent ? 'line-through text-gray-400' : 'text-gray-900'}>
+      {/* 시간 */}
+      <td className="px-3 py-2 text-sm text-gray-600 whitespace-nowrap w-14">{student.time}</td>
+
+      {/* 장소: 데스크톱만 표시 */}
+      <td className="hidden sm:table-cell px-3 py-2 text-sm text-gray-600 whitespace-nowrap max-w-[160px] truncate">{student.place}</td>
+
+      {/* 아동명 + 모바일에서 장소를 서브텍스트로 */}
+      <td className="px-3 py-2 text-sm font-medium">
+        <div className={isAbsent ? 'line-through text-gray-400' : 'text-gray-900'}>
           {student.name}
-        </span>
-        {isIndividual && (
-          <span className="ml-1.5 inline-block bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded font-semibold">
-            개별
-          </span>
-        )}
-        {isShuttle && (
-          <span className="ml-1.5 inline-block bg-blue-400 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
-            셔틀
-          </span>
+          {isIndividual && (
+            <span className="ml-1.5 inline-block bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded font-semibold">개별</span>
+          )}
+          {isShuttle && (
+            <span className="ml-1.5 inline-block bg-blue-400 text-white text-xs px-1.5 py-0.5 rounded font-semibold">셔틀</span>
+          )}
+        </div>
+        {student.place && (
+          <div className="sm:hidden text-xs text-gray-400 mt-0.5 font-normal truncate max-w-[120px]">{student.place}</div>
         )}
       </td>
-      <td className="px-3 py-2 text-center">
-        {student.note ? <NoteTooltip note={student.note} /> : null}
-      </td>
-      {/* Category */}
-      <td className="px-3 py-2">
+
+      {/* 구분 배지 */}
+      <td className="px-2 py-2 w-14">
         <button
           onClick={cycleCategory}
-          title="클릭하여 구분 변경 (MK→AK→초등→없음)"
-          className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors ${CATEGORY_BADGE[currentCategory]}`}
+          title="클릭하여 구분 변경"
+          className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors whitespace-nowrap ${CATEGORY_BADGE[currentCategory]}`}
         >
           {currentCategory || '구분'}
         </button>
       </td>
-      {/* Actions */}
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1 flex-wrap">
+
+      {/* 액션 버튼 - 한 줄 유지 */}
+      <td className="px-2 py-2">
+        <div className="flex items-center gap-1 whitespace-nowrap">
           <button
-            onClick={toggleAbsent}
+            onClick={() => onToggle(changeKey, isAbsent ? null : 'absent')}
             className={`text-xs px-2 py-1 rounded border transition-colors ${
-              isAbsent
-                ? 'bg-gray-500 text-white border-gray-500'
-                : 'border-gray-300 text-gray-600 hover:bg-gray-100'
+              isAbsent ? 'bg-gray-500 text-white border-gray-500' : 'border-gray-300 text-gray-600 hover:bg-gray-100'
             }`}
           >
             결석
           </button>
           {!isIndivStudent && (
             <button
-              onClick={toggleIndividual}
+              onClick={() => onToggle(changeKey, isIndividual ? null : 'individual')}
               className={`text-xs px-2 py-1 rounded border transition-colors ${
-                isIndividual
-                  ? 'bg-yellow-400 text-yellow-900 border-yellow-400'
-                  : 'border-gray-300 text-gray-600 hover:bg-yellow-50'
+                isIndividual ? 'bg-yellow-400 text-yellow-900 border-yellow-400' : 'border-gray-300 text-gray-600 hover:bg-yellow-50'
               }`}
             >
-              {['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section) ? '개별등원' : '개별하원'}
+              {isPickupSection ? '개별등원' : '개별하원'}
             </button>
           )}
           {isIndivStudent && (
             <button
-              onClick={toggleShuttle}
+              onClick={() => onToggle(changeKey, isShuttle ? null : 'shuttle')}
               className={`text-xs px-2 py-1 rounded border transition-colors ${
-                isShuttle
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 text-gray-600 hover:bg-blue-50'
+                isShuttle ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 text-gray-600 hover:bg-blue-50'
               }`}
             >
               셔틀
@@ -160,6 +149,11 @@ export default function StudentRow({
             삭제
           </button>
         </div>
+      </td>
+
+      {/* 특이사항 - 맨 마지막 */}
+      <td className="px-2 py-2 w-8 text-center">
+        {student.note ? <NoteTooltip note={student.note} /> : null}
       </td>
     </tr>
   );
