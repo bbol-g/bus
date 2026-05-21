@@ -120,7 +120,7 @@ export default function SearchPanel({ data }: Props) {
         }
       }
     }
-    return [...seen].slice(0, 20);
+    return Array.from(seen).slice(0, 20);
   }, [query, data]);
 
   function handleSelect(name: string) {
