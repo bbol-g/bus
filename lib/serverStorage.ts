@@ -73,3 +73,13 @@ export async function writeCategories(data: unknown): Promise<void> {
   if (USE_KV) return kvSet('categories', data);
   fsWrite('categories.json', data);
 }
+
+export async function readDayOverrides(): Promise<Record<string, Record<string, string>>> {
+  if (USE_KV) return (await kvGet<Record<string, Record<string, string>>>('day_overrides')) ?? {};
+  return fsRead<Record<string, Record<string, string>>>('day_overrides.json', {});
+}
+
+export async function writeDayOverrides(data: unknown): Promise<void> {
+  if (USE_KV) return kvSet('day_overrides', data);
+  fsWrite('day_overrides.json', data);
+}
