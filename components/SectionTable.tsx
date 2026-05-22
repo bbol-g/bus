@@ -13,16 +13,18 @@ interface Props {
   changes: DailyChanges;
   tempStudents: Student[];
   categoryStore: CategoryStore;
+  allDayOverrides: Record<string, Record<string, string>>;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
   onSetCategory: (studentName: string, category: StudentCategory) => void;
+  onDayOverride: (studentName: string, key: string, newDays: string) => void;
   defaultOpen?: boolean;
 }
 
 export default function SectionTable({
-  section, bus, changes, tempStudents, categoryStore,
-  onToggle, onDelete, onAddTemp, onSetCategory, defaultOpen = true,
+  section, bus, changes, tempStudents, categoryStore, allDayOverrides,
+  onToggle, onDelete, onAddTemp, onSetCategory, onDayOverride, defaultOpen = true,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [showModal, setShowModal] = useState(false);
@@ -41,7 +43,6 @@ export default function SectionTable({
 
   return (
     <div className="mb-4">
-      {/* Sticky collapsible header */}
       <button
         onClick={() => setOpen((v) => !v)}
         className={`sticky top-0 z-10 w-full flex items-center justify-between px-4 py-2.5 border rounded-lg shadow-sm transition-all ${headerBg} ${headerBorder} ${open ? 'rounded-b-none' : ''}`}
@@ -68,12 +69,12 @@ export default function SectionTable({
           <div className="overflow-x-auto border border-t-0 border-gray-200 rounded-b-lg">
             <table className="min-w-full text-sm table-fixed">
               <colgroup>
-                <col className="w-14" />                          {/* 시간 */}
-                <col className="hidden sm:table-column w-40" />   {/* 장소 */}
-                <col />                                           {/* 아동명 */}
-                <col className="w-16" />                          {/* 구분 */}
-                <col className="w-48" />                          {/* 액션 */}
-                <col className="w-8" />                           {/* 특이 */}
+                <col className="w-14" />
+                <col className="hidden sm:table-column w-40" />
+                <col />
+                <col className="w-16" />
+                <col className="w-48" />
+                <col className="w-8" />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200">
@@ -102,9 +103,11 @@ export default function SectionTable({
                       changeState={changeState}
                       isIndivStudent={bus === '개별'}
                       categoryStore={categoryStore}
+                      dayOverrides={allDayOverrides[student.name] ?? {}}
                       onToggle={onToggle}
                       onDelete={(id, isTemp) => onDelete(id, isTemp, bus, section.name)}
                       onSetCategory={onSetCategory}
+                      onDayOverride={(entryKey, newDays) => onDayOverride(student.name, entryKey, newDays)}
                       changeKey={key}
                     />
                   );

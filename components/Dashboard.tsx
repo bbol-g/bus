@@ -35,6 +35,7 @@ export default function Dashboard({ data, onReupload }: Props) {
   const [changes, setChanges] = useState<DailyChanges>({});
   const [tempStudents, setTempStudents] = useState<Record<string, Student[]>>({});
   const [categoryStore, setCategoryStore] = useState<CategoryStore>({});
+  const [allDayOverrides, setAllDayOverrides] = useState<Record<string, Record<string, string>>>({});
   const today = getTodayKorean();
   const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(today);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -46,9 +47,11 @@ export default function Dashboard({ data, onReupload }: Props) {
     Promise.all([
       fetch(`/api/changes?date=${todayStr}`).then((r) => r.ok ? r.json() : {}).catch(() => ({})),
       fetch('/api/categories').then((r) => r.ok ? r.json() : {}).catch(() => ({})),
-    ]).then(([loaded, cats]: [DailyChanges, CategoryStore]) => {
+      fetch('/api/day-overrides').then((r) => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([loaded, cats, dayOvr]: [DailyChanges, CategoryStore, Record<string, Record<string, string>>]) => {
       setChanges(loaded);
       setCategoryStore(cats);
+      setAllDayOverrides(dayOvr);
 
       const temps: Record<string, Student[]> = {};
       for (const [key, value] of Object.entries(loaded)) {
@@ -135,6 +138,16 @@ export default function Dashboard({ data, onReupload }: Props) {
       [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section, id },
     };
     persistChanges(next as DailyChanges);
+  }
+
+  function handleDayOverride(studentName: string, key: string, newDays: string) {
+    const studentOverrides = { ...(allDayOverrides[studentName] ?? {}), [key]: newDays };
+    setAllDayOverrides((prev) => ({ ...prev, [studentName]: studentOverrides }));
+    fetch('/api/day-overrides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: studentName, overrides: studentOverrides }),
+    }).catch(console.error);
   }
 
   function handleSetCategory(studentName: string, category: StudentCategory) {
@@ -320,10 +333,12 @@ export default function Dashboard({ data, onReupload }: Props) {
                     changes={changes}
                     tempStudents={tempStudents}
                     categoryStore={categoryStore}
+                    allDayOverrides={allDayOverrides}
                     onToggle={handleToggle}
                     onDelete={handleDelete}
                     onAddTemp={handleAddTemp}
                     onSetCategory={handleSetCategory}
+                    onDayOverride={handleDayOverride}
                   />
                 </div>
               ))
