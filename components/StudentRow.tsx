@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Student, ChangeState, BusName, SectionType, StudentCategory, CategoryStore, DayOfWeek } from '@/types';
 import { DAY_OF_WEEK } from '@/types';
 import { matchesDay } from '@/lib/dateUtils';
@@ -52,6 +52,76 @@ function NoteTooltip({ note }: { note: string }) {
   );
 }
 
+function DayBadge({
+  effectiveDays,
+  isOverridden,
+  onToggle,
+}: {
+  effectiveDays: string;
+  isOverridden: boolean;
+  onToggle: (day: DayOfWeek) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const activeDays = DAY_OF_WEEK.filter(d => matchesDay(effectiveDays, d));
+  const label = activeDays.length === 5 ? '매일'
+    : activeDays.length === 0 ? '요일 없음'
+    : activeDays.length === 1 ? activeDays[0] + '요일'
+    : activeDays.join('·');
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`mt-0.5 flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+          open
+            ? 'bg-blue-100 text-blue-600'
+            : isOverridden
+              ? 'text-blue-500 hover:text-blue-600'
+              : 'text-gray-400 hover:text-gray-600'
+        }`}
+        title="탑승 요일 클릭하여 수정"
+      >
+        {label}
+        <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={open ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 flex gap-1.5">
+          {DAY_OF_WEEK.map(day => {
+            const active = matchesDay(effectiveDays, day);
+            return (
+              <button
+                key={day}
+                onClick={() => onToggle(day)}
+                className={`w-9 h-9 rounded-lg text-sm font-bold transition-colors ${
+                  active
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                }`}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentRow({
   student,
   bus,
@@ -83,9 +153,9 @@ export default function StudentRow({
 
   const isPickupSection = ['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section);
 
-  // 요일 override 키 & 현재 유효 요일
   const overrideKey = `${section}||${bus}||${student.dayMwf ? 'mwf' : 'tuth'}`;
-  const effectiveDays = overrideKey in dayOverrides
+  const isOverridden = overrideKey in dayOverrides;
+  const effectiveDays = isOverridden
     ? dayOverrides[overrideKey]
     : (student.dayMwf || student.dayTuTh || '');
 
@@ -99,13 +169,10 @@ export default function StudentRow({
 
   return (
     <tr className={`${rowClass} border-b border-gray-100 transition-colors`}>
-      {/* 시간 */}
       <td className="px-3 py-2 text-sm text-gray-600 whitespace-nowrap w-14">{student.time}</td>
 
-      {/* 장소: 데스크톱만 표시 */}
       <td className="hidden sm:table-cell px-3 py-2 text-sm text-gray-600 whitespace-nowrap max-w-[160px] truncate">{student.place}</td>
 
-      {/* 아동명 + 요일 토글 */}
       <td className="px-3 py-2 text-sm font-medium">
         <div className={isAbsent ? 'line-through text-gray-400' : 'text-gray-900'}>
           {student.name}
@@ -120,29 +187,14 @@ export default function StudentRow({
           <div className="sm:hidden text-xs text-gray-400 mt-0.5 font-normal truncate max-w-[120px]">{student.place}</div>
         )}
         {!student.isTemp && (
-          <div className="flex gap-0.5 mt-1">
-            {DAY_OF_WEEK.map(day => {
-              const active = matchesDay(effectiveDays, day);
-              return (
-                <button
-                  key={day}
-                  onClick={() => toggleDay(day)}
-                  title={`${day}요일 ${active ? '제외' : '포함'}`}
-                  className={`text-[10px] w-5 h-5 rounded font-bold transition-colors ${
-                    active
-                      ? 'bg-blue-500 text-white hover:bg-blue-600'
-                      : 'bg-gray-100 text-gray-300 hover:bg-gray-200 hover:text-gray-500'
-                  }`}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
+          <DayBadge
+            effectiveDays={effectiveDays}
+            isOverridden={isOverridden}
+            onToggle={toggleDay}
+          />
         )}
       </td>
 
-      {/* 구분 배지 */}
       <td className="px-2 py-2 w-14">
         <button
           onClick={cycleCategory}
@@ -153,7 +205,6 @@ export default function StudentRow({
         </button>
       </td>
 
-      {/* 액션 버튼 */}
       <td className="px-2 py-2">
         <div className="flex items-center gap-1 whitespace-nowrap">
           <button
@@ -193,7 +244,6 @@ export default function StudentRow({
         </div>
       </td>
 
-      {/* 특이사항 */}
       <td className="px-2 py-2 w-8 text-center">
         {student.note ? <NoteTooltip note={student.note} /> : null}
       </td>
