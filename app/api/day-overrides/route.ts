@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readDayOverrides, writeDayOverrides } from '@/lib/serverStorage';
 
 export async function GET(req: NextRequest) {
-  const name = req.nextUrl.searchParams.get('name') ?? '';
-  if (!name) return NextResponse.json({});
+  const name = req.nextUrl.searchParams.get('name');
   const all = await readDayOverrides();
-  return NextResponse.json(all[name] ?? {});
+  if (name) return NextResponse.json(all[name] ?? {});
+  return NextResponse.json(all);
 }
 
 export async function POST(req: NextRequest) {

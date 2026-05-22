@@ -12,20 +12,30 @@ interface Props {
   changes: DailyChanges;
   tempStudents: Record<string, Student[]>;
   categoryStore: CategoryStore;
+  allDayOverrides: Record<string, Record<string, string>>;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
   onSetCategory: (studentName: string, category: StudentCategory) => void;
+  onDayOverride: (studentName: string, key: string, newDays: string) => void;
 }
 
-export default function HoTab({ bus, today, changes, tempStudents, categoryStore, onToggle, onDelete, onAddTemp, onSetCategory }: Props) {
+export default function HoTab({ bus, today, changes, tempStudents, categoryStore, allDayOverrides, onToggle, onDelete, onAddTemp, onSetCategory, onDayOverride }: Props) {
   const filteredSections = bus.sections.map((section) => {
     const filtered = today
       ? section.students.filter((s) => {
-          const key = makeChangeKey(bus.name, section.name, s.id);
-          const change = changes[key];
+          const changeKey = makeChangeKey(bus.name, section.name, s.id);
+          const change = changes[changeKey];
           if (typeof change === 'object' && change !== null) return false;
-          return studentRunsToday(s.dayMwf, s.dayTuTh, today);
+
+          // 요일 override 적용
+          const mwfKey = `${section.name}||${bus.name}||mwf`;
+          const tuthKey = `${section.name}||${bus.name}||tuth`;
+          const studentOverrides = allDayOverrides[s.name] ?? {};
+          const effectiveMwf = mwfKey in studentOverrides ? studentOverrides[mwfKey] : s.dayMwf;
+          const effectiveTuTh = tuthKey in studentOverrides ? studentOverrides[tuthKey] : s.dayTuTh;
+
+          return studentRunsToday(effectiveMwf, effectiveTuTh, today);
         })
       : [];
     const tempKey = `${bus.name}_${section.name}`;
@@ -51,10 +61,12 @@ export default function HoTab({ bus, today, changes, tempStudents, categoryStore
           changes={changes}
           tempStudents={section.temps}
           categoryStore={categoryStore}
+          allDayOverrides={allDayOverrides}
           onToggle={onToggle}
           onDelete={onDelete}
           onAddTemp={onAddTemp}
           onSetCategory={onSetCategory}
+          onDayOverride={onDayOverride}
         />
       ))}
     </div>
