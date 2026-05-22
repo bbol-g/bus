@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DayOfWeek, ShuttleBase } from '@/types';
 import { DAY_OF_WEEK, PICKUP_SECTIONS } from '@/types';
 import { matchesDay } from '@/lib/dateUtils';
@@ -12,6 +12,7 @@ interface Entry {
   place: string;
   dayMwf: string;
   dayTuTh: string;
+  overrideSlot: 'mwf' | 'tuth';
 }
 
 interface StudentSchedule {
@@ -36,6 +37,7 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
             place: s.place,
             dayMwf: s.dayMwf,
             dayTuTh: s.dayTuTh,
+            overrideSlot: s.dayMwf ? 'mwf' : 'tuth',
           });
         }
       }
@@ -46,10 +48,12 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
 
 function applyOverrides(entries: Entry[], overrides: Record<string, string>): Entry[] {
   return entries.map(e => {
-    const key = `${e.section}||${e.bus}||${e.dayMwf ? 'mwf' : 'tuth'}`;
+    const key = `${e.section}||${e.bus}||${e.overrideSlot}`;
     if (!(key in overrides)) return e;
     const days = overrides[key];
-    return e.dayMwf ? { ...e, dayMwf: days, dayTuTh: '' } : { ...e, dayMwf: '', dayTuTh: days };
+    return e.overrideSlot === 'mwf'
+      ? { ...e, dayMwf: days, dayTuTh: '' }
+      : { ...e, dayMwf: '', dayTuTh: days };
   });
 }
 
@@ -71,14 +75,75 @@ function formatGroupLabel(days: DayOfWeek[]): string {
   return days.join('·');
 }
 
+function GroupDayBadge({
+  groupDays,
+  entries,
+  onToggle,
+}: {
+  groupDays: DayOfWeek[];
+  entries: Entry[];
+  onToggle: (entries: Entry[], day: DayOfWeek) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const label = groupDays.length === 0 ? '요일 없음' : formatGroupLabel(groupDays);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 transition-colors ${
+          open ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+        }`}
+        title="탑승 요일 클릭하여 수정"
+      >
+        {label}
+        <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={open ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-[60] bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 flex gap-1.5">
+          {DAY_OF_WEEK.map(day => {
+            const active = groupDays.includes(day);
+            return (
+              <button
+                key={day}
+                onClick={() => onToggle(entries, day)}
+                className={`w-9 h-9 rounded-lg text-sm font-bold transition-colors ${
+                  active ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                }`}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScheduleModal({
   schedule,
   overrides,
   onClose,
+  onToggleDay,
 }: {
   schedule: StudentSchedule;
   overrides: Record<string, string>;
   onClose: () => void;
+  onToggleDay: (entries: Entry[], day: DayOfWeek) => void;
 }) {
   const effective = applyOverrides(schedule.entries, overrides);
 
@@ -127,11 +192,13 @@ function ScheduleModal({
             <p className="text-sm text-gray-400 text-center py-4">배치 정보 없음</p>
           ) : (
             groups.map(g => (
-              <div key={g.days.join('')}>
+              <div key={entrySig(g.entries)}>
                 <div className="mb-1.5">
-                  <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
-                    {formatGroupLabel(g.days)}
-                  </span>
+                  <GroupDayBadge
+                    groupDays={g.days}
+                    entries={g.entries}
+                    onToggle={onToggleDay}
+                  />
                 </div>
                 <div className="flex flex-col divide-y divide-gray-50 pl-1 border-l-2 border-gray-100 ml-1">
                   {sortEntries(g.entries).map((e, i) => <EntryRow key={i} e={e} />)}
@@ -175,6 +242,25 @@ export default function SearchPanel({ data }: Props) {
       .then(r => r.json())
       .then((d: Record<string, string>) => setOverrides(d))
       .catch(() => {});
+  }
+
+  function handleToggleDayGroup(entries: Entry[], day: DayOfWeek) {
+    let newOverrides = { ...overrides };
+    for (const entry of entries) {
+      const key = `${entry.section}||${entry.bus}||${entry.overrideSlot}`;
+      const currentDays = entry.overrideSlot === 'mwf' ? entry.dayMwf : entry.dayTuTh;
+      const wasActive = matchesDay(currentDays, day);
+      const newDays = DAY_OF_WEEK.filter(d => d === day ? !wasActive : matchesDay(currentDays, d)).join('');
+      newOverrides = { ...newOverrides, [key]: newDays };
+    }
+    setOverrides(newOverrides);
+    if (selected) {
+      fetch('/api/day-overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: selected.name, overrides: newOverrides }),
+      }).catch(() => {});
+    }
   }
 
   return (
@@ -223,6 +309,7 @@ export default function SearchPanel({ data }: Props) {
           schedule={selected}
           overrides={overrides}
           onClose={() => setSelected(null)}
+          onToggleDay={handleToggleDayGroup}
         />
       )}
     </>
