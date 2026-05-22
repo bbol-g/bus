@@ -36,3 +36,18 @@ export function formatDate(dateStr: string): string {
   const dow = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
   return `${month}월 ${day}일 (${dow})`;
 }
+
+export function getDayOfWeekFromStr(dateStr: string): DayOfWeek | null {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return DAY_MAP[dow] ?? null;
+}
+
+export function addDaysToStr(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d + delta);
+  const yr = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  const dy = String(date.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${dy}`;
+}

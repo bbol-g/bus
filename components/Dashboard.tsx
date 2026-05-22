@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, DayOfWeek, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES, DAY_OF_WEEK } from '@/types';
-import { formatDate, getTodayKorean, getTodayString } from '@/lib/dateUtils';
+import { addDaysToStr, formatDate, getDayOfWeekFromStr, getTodayKorean, getTodayString } from '@/lib/dateUtils';
 import { makeChangeKey, setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
@@ -36,58 +36,65 @@ export default function Dashboard({ data, onReupload }: Props) {
   const [tempStudents, setTempStudents] = useState<Record<string, Student[]>>({});
   const [categoryStore, setCategoryStore] = useState<CategoryStore>({});
   const [allDayOverrides, setAllDayOverrides] = useState<Record<string, Record<string, string>>>({});
-  const today = getTodayKorean();
-  const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(today);
+  const [selectedDate, setSelectedDate] = useState(getTodayString);
+  const todayStr = getTodayString();
+  const todayKorean = getTodayKorean();
+  const viewDay = getDayOfWeekFromStr(selectedDate);
   const fileRef = useRef<HTMLInputElement>(null);
   const [reuploadLoading, setReuploadLoading] = useState(false);
 
+  // Static data: load once
   useEffect(() => {
-    const todayStr = getTodayString();
-
     Promise.all([
-      fetch(`/api/changes?date=${todayStr}`).then((r) => r.ok ? r.json() : {}).catch(() => ({})),
-      fetch('/api/categories').then((r) => r.ok ? r.json() : {}).catch(() => ({})),
-      fetch('/api/day-overrides').then((r) => r.ok ? r.json() : {}).catch(() => ({})),
-    ]).then(([loaded, cats, dayOvr]: [DailyChanges, CategoryStore, Record<string, Record<string, string>>]) => {
-      setChanges(loaded);
+      fetch('/api/categories').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch('/api/day-overrides').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([cats, dayOvr]: [CategoryStore, Record<string, Record<string, string>>]) => {
       setCategoryStore(cats);
       setAllDayOverrides(dayOvr);
-
-      const temps: Record<string, Student[]> = {};
-      for (const [key, value] of Object.entries(loaded)) {
-        if (typeof value === 'object' && value !== null && 'isTemp' in value) {
-          const temp = value as { isTemp: true; name: string; place: string; time: string; note: string; bus: BusName; section: string; id: string };
-          const mapKey = `${temp.bus}_${temp.section}`;
-          if (!temps[mapKey]) temps[mapKey] = [];
-          temps[mapKey].push({
-            id: temp.id ?? key,
-            name: temp.name,
-            time: temp.time,
-            place: temp.place,
-            contact: '',
-            note: temp.note,
-            dayMwf: '매일',
-            timeTuTh: '',
-            dayTuTh: '매일',
-            bus: temp.bus as BusName,
-            section: temp.section as Student['section'],
-            isTemp: true,
-          });
-        }
-      }
-      setTempStudents(temps);
     });
   }, []);
 
+  // Date-dependent data: reload when selectedDate changes
+  useEffect(() => {
+    fetch(`/api/changes?date=${selectedDate}`)
+      .then(r => r.ok ? r.json() : {})
+      .catch(() => ({}))
+      .then((loaded: DailyChanges) => {
+        setChanges(loaded);
+        const temps: Record<string, Student[]> = {};
+        for (const [key, value] of Object.entries(loaded)) {
+          if (typeof value === 'object' && value !== null && 'isTemp' in value) {
+            const temp = value as { isTemp: true; name: string; place: string; time: string; note: string; bus: BusName; section: string; id: string };
+            const mapKey = `${temp.bus}_${temp.section}`;
+            if (!temps[mapKey]) temps[mapKey] = [];
+            temps[mapKey].push({
+              id: temp.id ?? key,
+              name: temp.name,
+              time: temp.time,
+              place: temp.place,
+              contact: '',
+              note: temp.note,
+              dayMwf: '매일',
+              timeTuTh: '',
+              dayTuTh: '매일',
+              bus: temp.bus as BusName,
+              section: temp.section as Student['section'],
+              isTemp: true,
+            });
+          }
+        }
+        setTempStudents(temps);
+      });
+  }, [selectedDate]);
+
   const persistChanges = useCallback((next: DailyChanges) => {
     setChanges(next);
-    const date = getTodayString();
     fetch('/api/changes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, changes: next }),
+      body: JSON.stringify({ date: selectedDate, changes: next }),
     }).catch(console.error);
-  }, []);
+  }, [selectedDate]);
 
   function handleToggle(key: string, state: ChangeState | null) {
     const next = { ...changes };
@@ -160,6 +167,15 @@ export default function Dashboard({ data, onReupload }: Props) {
     }).catch(console.error);
   }
 
+  function navigateToDay(day: DayOfWeek) {
+    const dayOrder: Record<DayOfWeek, number> = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5 };
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const current = new Date(y, m - 1, d);
+    const currentDow = current.getDay();
+    const delta = dayOrder[day] - currentDow;
+    setSelectedDate(addDaysToStr(selectedDate, delta));
+  }
+
   async function handleReupload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -191,9 +207,35 @@ export default function Dashboard({ data, onReupload }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-4 print:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xl">🚌</span>
-          <div>
+          <div className="flex items-center gap-1">
             <span className="font-bold text-gray-800">셔틀버스 대시보드</span>
-            <span className="ml-3 text-sm text-gray-500">{formatDate(getTodayString())}</span>
+            <div className="flex items-center gap-0.5 ml-2">
+              <button
+                onClick={() => setSelectedDate(d => addDaysToStr(d, -1))}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 text-base leading-none"
+                aria-label="전날"
+              >
+                ←
+              </button>
+              <span className="text-sm text-gray-600 font-medium px-1 min-w-[130px] text-center">
+                {formatDate(selectedDate)}
+              </span>
+              <button
+                onClick={() => setSelectedDate(d => addDaysToStr(d, 1))}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 text-base leading-none"
+                aria-label="다음날"
+              >
+                →
+              </button>
+              {selectedDate !== todayStr && (
+                <button
+                  onClick={() => setSelectedDate(todayStr)}
+                  className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 ml-1 whitespace-nowrap"
+                >
+                  오늘
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -244,20 +286,20 @@ export default function Dashboard({ data, onReupload }: Props) {
             {DAY_OF_WEEK.map((d) => (
               <button
                 key={d}
-                onClick={() => setSelectedDay(d)}
+                onClick={() => navigateToDay(d)}
                 className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors border ${
-                  selectedDay === d
+                  viewDay === d
                     ? 'bg-indigo-600 text-white border-indigo-600'
                     : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }${today === d ? ' ring-2 ring-indigo-300' : ''}`}
+                }${todayKorean === d ? ' ring-2 ring-indigo-300' : ''}`}
               >
                 {d}
-                {today === d && <span className="ml-1 text-[10px] opacity-80">오늘</span>}
+                {todayKorean === d && <span className="ml-1 text-[10px] opacity-80">오늘</span>}
               </button>
             ))}
           </div>
 
-          {selectedDay === null ? (
+          {viewDay === null ? (
             <div className="text-center text-gray-400 py-16">요일을 선택하세요.</div>
           ) : (
             <>
@@ -286,7 +328,7 @@ export default function Dashboard({ data, onReupload }: Props) {
                 changes={changes}
                 categoryStore={categoryStore}
                 categoryFilter={categoryFilter}
-                today={selectedDay}
+                today={viewDay}
                 tempStudents={tempStudents}
               />
             </>
@@ -317,8 +359,10 @@ export default function Dashboard({ data, onReupload }: Props) {
           </div>
 
           <div className="p-4 max-w-5xl mx-auto">
-            {today === null ? (
-              <div className="text-center text-gray-400 py-16">오늘은 주말입니다. 셔틀 운행이 없습니다.</div>
+            {viewDay === null ? (
+              <div className="text-center text-gray-400 py-16">
+                {selectedDate === todayStr ? '오늘은 주말입니다. 셔틀 운행이 없습니다.' : '주말입니다. 셔틀 운행이 없습니다.'}
+              </div>
             ) : (
               displayedBuses.map((bus) => (
                 <div key={bus.name} className="mb-8">
@@ -329,7 +373,7 @@ export default function Dashboard({ data, onReupload }: Props) {
                   )}
                   <HoTab
                     bus={bus}
-                    today={today}
+                    today={viewDay}
                     changes={changes}
                     tempStudents={tempStudents}
                     categoryStore={categoryStore}
