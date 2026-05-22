@@ -63,8 +63,8 @@ function entrySig(entries: Entry[]): string {
 
 function sortEntries(entries: Entry[]): Entry[] {
   return [...entries].sort((a, b) => {
-    const aP = PICKUP_SECTIONS.includes(a.section as never) ? 0 : 1;
-    const bP = PICKUP_SECTIONS.includes(b.section as never) ? 0 : 1;
+    const aP = (PICKUP_SECTIONS as string[]).includes(a.section) ? 0 : 1;
+    const bP = (PICKUP_SECTIONS as string[]).includes(b.section) ? 0 : 1;
     return aP - bP;
   });
 }
@@ -161,7 +161,7 @@ function ScheduleModal({
   }
 
   function EntryRow({ e }: { e: Entry }) {
-    const isPickup = PICKUP_SECTIONS.includes(e.section as never);
+    const isPickup = (PICKUP_SECTIONS as string[]).includes(e.section);
     return (
       <div className="flex items-center gap-2 py-1.5 text-sm">
         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded shrink-0 ${isPickup ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
