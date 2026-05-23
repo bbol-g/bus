@@ -100,7 +100,15 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   let studentIdx = 0;
   let lastTimeMwf = '';
   let lastPlace = '';
-  let colNote = COL.NOTE; // 동적 감지 (비고/특이사항 헤더 위치)
+
+  // 컬럼 위치 — 헤더 행에서 동적 감지 (기본값은 COL 상수)
+  let colTimeMwf = COL.TIME_MWF;
+  let colPlace    = COL.PLACE;
+  let colNameMwf  = COL.NAME_MWF;
+  let colDayMwf   = COL.DAY_MWF;
+  let colTimeTuTh = COL.TIME_TUTH;
+  let colNameTuTh = COL.NAME_TUTH;
+  let colNote     = COL.NOTE;
 
   for (const row of rows) {
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
@@ -120,30 +128,53 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
       continue;
     }
 
-    // 섹션 헤더 직후의 컬럼명 행: 비고/특이사항 컬럼 위치 동적 감지
+    // 섹션 헤더 직후의 컬럼명 행: 모든 컬럼 위치 동적 감지
     if (headerSkip) {
       headerSkip = false;
-      const cells = row as (string | number | boolean | null | undefined)[];
+      const cells = (row as (string | number | boolean | null | undefined)[]).map(c => String(c ?? '').trim());
+      let timeSeen = 0;
+      let nameSeen = 0;
       for (let i = 0; i < cells.length; i++) {
-        const v = String(cells[i] ?? '').trim();
-        if (v === '비고' || v === '특이사항') { colNote = i; break; }
+        const v = cells[i];
+        if (!v) continue;
+        if (v === '시간(월수금)') {
+          colTimeMwf = i;
+        } else if (v === '시간(화목)') {
+          colTimeTuTh = i;
+        } else if (v === '시간') {
+          if (timeSeen === 0) colTimeMwf = i; else colTimeTuTh = i;
+          timeSeen++;
+        } else if (v === '장소') {
+          colPlace = i;
+        } else if (v === '이름(월수금)') {
+          colNameMwf = i; nameSeen++;
+        } else if (v === '이름(화목)') {
+          colNameTuTh = i; nameSeen++;
+        } else if (v === '이름' || v.startsWith('이름(')) {
+          if (nameSeen === 0) colNameMwf = i; else colNameTuTh = i;
+          nameSeen++;
+        } else if (v === '요일' || v.startsWith('요일(')) {
+          colDayMwf = i;
+        } else if (v === '비고' || v === '특이사항') {
+          colNote = i;
+        }
       }
       continue;
     }
 
     if (!currentSection) continue;
 
-    const rawTimeMwf = (row as unknown[])[COL.TIME_MWF];
-    const rawPlace = cellStr(row, COL.PLACE);
-    const nameMwf = cellStr(row, COL.NAME_MWF);
-    const dayMwf = cellStr(row, COL.DAY_MWF);
-    const rawTimeTuTh = (row as unknown[])[COL.TIME_TUTH];
-    const nameTuTh = cellStr(row, COL.NAME_TUTH);
-    const note = cellStr(row, colNote);
+    const rawTimeMwf = (row as unknown[])[colTimeMwf];
+    const rawPlace   = cellStr(row, colPlace);
+    const nameMwf    = cellStr(row, colNameMwf);
+    const dayMwf     = cellStr(row, colDayMwf);
+    const rawTimeTuTh = (row as unknown[])[colTimeTuTh];
+    const nameTuTh   = cellStr(row, colNameTuTh);
+    const note       = cellStr(row, colNote);
 
     // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
     if (isHeaderValue(nameMwf)) continue;
-    const headerCellCount = [nameMwf, nameTuTh, cellStr(row, COL.TIME_MWF), rawPlace].filter(v => isHeaderValue(String(v))).length;
+    const headerCellCount = [nameMwf, nameTuTh, cellStr(row, colTimeMwf), rawPlace].filter(v => isHeaderValue(String(v))).length;
     if (headerCellCount >= 2) continue;
 
     // 시간/장소 승계 (빈 셀이면 이전 값 사용)
@@ -159,7 +190,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
     if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
       const timeTuThStr = formatExcelTime(rawTimeTuTh);
-      const tuThDay = inferTuThDay(dayMwf, cellStr(row, COL.TIME_TUTH));
+      const tuThDay = inferTuThDay(dayMwf, cellStr(row, colTimeTuTh));
       currentSection.students.push({
         id: generateId(sheetName, currentSection.name, nameMwf, studentIdx++),
         name: nameMwf,
@@ -196,7 +227,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     // ② 화목 학생 (G열에 이름이 있는 경우, 다른 이름인 경우만)
     if (hasTuTh) {
       const timeTuThStr = formatExcelTime(rawTimeTuTh);
-      const tuThDay = inferTuThDay(dayMwf, cellStr(row, COL.TIME_TUTH));
+      const tuThDay = inferTuThDay(dayMwf, cellStr(row, colTimeTuTh));
 
       currentSection.students.push({
         id: generateId(sheetName, currentSection.name, nameTuTh, studentIdx++),
