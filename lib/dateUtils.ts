@@ -8,17 +8,18 @@ const DAY_MAP: Record<number, DayOfWeek> = {
   5: '금',
 };
 
+// 한국 표준시 UTC+9 (서머타임 없음)
+function nowKST(): Date {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
+
 export function getTodayKorean(): DayOfWeek | null {
-  const dow = new Date().getDay();
+  const dow = nowKST().getUTCDay();
   return DAY_MAP[dow] ?? null;
 }
 
 export function getTodayString(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return nowKST().toISOString().slice(0, 10);
 }
 
 export function matchesDay(dayValue: string, today: DayOfWeek): boolean {
@@ -34,24 +35,23 @@ export function studentRunsToday(dayMwf: string, dayTuTh: string, today: DayOfWe
 }
 
 export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  const dow = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-  return `${month}월 ${day}일 (${dow})`;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dow = ['일', '월', '화', '수', '목', '금', '토'][date.getUTCDay()];
+  return `${m}월 ${d}일 (${dow})`;
 }
 
 export function getDayOfWeekFromStr(dateStr: string): DayOfWeek | null {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const dow = new Date(y, m - 1, d).getDay();
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   return DAY_MAP[dow] ?? null;
 }
 
 export function addDaysToStr(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d + delta);
-  const yr = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const dy = String(date.getDate()).padStart(2, '0');
+  const date = new Date(Date.UTC(y, m - 1, d + delta));
+  const yr = date.getUTCFullYear();
+  const mo = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dy = String(date.getUTCDate()).padStart(2, '0');
   return `${yr}-${mo}-${dy}`;
 }
