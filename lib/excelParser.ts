@@ -100,6 +100,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   let studentIdx = 0;
   let lastTimeMwf = '';
   let lastPlace = '';
+  let colNote = COL.NOTE; // 동적 감지 (비고/특이사항 헤더 위치)
 
   for (const row of rows) {
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
@@ -119,9 +120,14 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
       continue;
     }
 
-    // 섹션 헤더 직후의 컬럼명 행 스킵
+    // 섹션 헤더 직후의 컬럼명 행: 비고/특이사항 컬럼 위치 동적 감지
     if (headerSkip) {
       headerSkip = false;
+      const cells = row as (string | number | boolean | null | undefined)[];
+      for (let i = 0; i < cells.length; i++) {
+        const v = String(cells[i] ?? '').trim();
+        if (v === '비고' || v === '특이사항') { colNote = i; break; }
+      }
       continue;
     }
 
@@ -133,7 +139,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     const dayMwf = cellStr(row, COL.DAY_MWF);
     const rawTimeTuTh = (row as unknown[])[COL.TIME_TUTH];
     const nameTuTh = cellStr(row, COL.NAME_TUTH);
-    const note = cellStr(row, COL.NOTE);
+    const note = cellStr(row, colNote);
 
     // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
     if (isHeaderValue(nameMwf)) continue;
