@@ -84,7 +84,13 @@ function generateId(bus: string, section: string, name: string, idx: number): st
 
 // 학생 이름이 헤더 텍스트인지 판별 (파싱 오류 방지)
 function isHeaderValue(v: string): boolean {
-  return ['시간', '장소', '이름', '요일', '아동명', '연락처', '구분', '특이사항'].includes(v);
+  const EXACT = ['시간', '장소', '이름', '요일', '아동명', '연락처', '구분', '특이사항'];
+  if (EXACT.includes(v)) return true;
+  // 괄호 포함 변형: '이름(화목)', '이름(월수금)', '시간(화목)' 등
+  if (EXACT.some(h => v.startsWith(h + '('))) return true;
+  // 요일+시간 패턴: '금 3:08', '화3:10', '목 15:00' 등
+  if (/^[월화수목금]\s*\d{1,2}:\d{2}/.test(v)) return true;
+  return false;
 }
 
 function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
@@ -94,6 +100,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   let studentIdx = 0;
   let lastTimeMwf = '';
   let lastPlace = '';
+  let colNote = COL.NOTE; // 동적 감지 (비고/특이사항 헤더 위치)
 
   for (const row of rows) {
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
@@ -113,9 +120,14 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
       continue;
     }
 
-    // 섹션 헤더 직후의 컬럼명 행 스킵
+    // 섹션 헤더 직후의 컬럼명 행: 비고/특이사항 컬럼 위치 동적 감지
     if (headerSkip) {
       headerSkip = false;
+      const cells = row as (string | number | boolean | null | undefined)[];
+      for (let i = 0; i < cells.length; i++) {
+        const v = String(cells[i] ?? '').trim();
+        if (v === '비고' || v === '특이사항') { colNote = i; break; }
+      }
       continue;
     }
 
@@ -127,7 +139,12 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     const dayMwf = cellStr(row, COL.DAY_MWF);
     const rawTimeTuTh = (row as unknown[])[COL.TIME_TUTH];
     const nameTuTh = cellStr(row, COL.NAME_TUTH);
-    const note = cellStr(row, COL.NOTE);
+    const note = cellStr(row, colNote);
+
+    // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
+    if (isHeaderValue(nameMwf)) continue;
+    const headerCellCount = [nameMwf, nameTuTh, cellStr(row, COL.TIME_MWF), rawPlace].filter(v => isHeaderValue(String(v))).length;
+    if (headerCellCount >= 2) continue;
 
     // 시간/장소 승계 (빈 셀이면 이전 값 사용)
     if (rawTimeMwf != null && rawTimeMwf !== '') lastTimeMwf = formatExcelTime(rawTimeMwf);
@@ -135,9 +152,6 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
 
     const timeMwfStr = lastTimeMwf;
     const placeStr = lastPlace;
-
-    // 헤더 값 혼입 방지
-    if (isHeaderValue(nameMwf)) continue;
 
     const hasMwf = nameMwf && !isHeaderValue(nameMwf);
     const hasTuTh = nameTuTh && !isHeaderValue(nameTuTh);
