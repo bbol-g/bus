@@ -72,7 +72,7 @@ export default function SectionTable({
                 <col className="w-14" />
                 <col className="hidden sm:table-column w-40" />
                 <col />
-                <col className="w-16" />
+                <col className="w-24" />
                 <col className="w-48" />
                 <col className="w-8" />
               </colgroup>

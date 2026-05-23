@@ -20,13 +20,12 @@ interface Props {
   changeKey: string;
 }
 
-const CYCLE_ORDER: StudentCategory[] = ['', 'MK', 'AK', '초등'];
-const CATEGORY_BADGE: Record<string, string> = {
-  '': 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200',
+const CATEGORY_ACTIVE: Record<string, string> = {
   MK: 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200',
   AK: 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200',
   '초등': 'bg-teal-100 text-teal-700 border-teal-300 hover:bg-teal-200',
 };
+const CATEGORY_INACTIVE = 'bg-white text-gray-300 border-gray-200 hover:border-gray-300 hover:text-gray-500';
 
 function NoteTooltip({ note }: { note: string }) {
   const [visible, setVisible] = useState(false);
@@ -146,11 +145,6 @@ export default function StudentRow({
   else if (isIndividual) rowClass = 'bg-yellow-50';
   else if (isShuttle) rowClass = 'bg-blue-50';
 
-  function cycleCategory() {
-    const idx = CYCLE_ORDER.indexOf(currentCategory);
-    onSetCategory(student.name, CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length]);
-  }
-
   const isPickupSection = ['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section);
 
   const overrideKey = `${section}||${bus}||${student.dayMwf ? 'mwf' : 'tuth'}`;
@@ -195,14 +189,20 @@ export default function StudentRow({
         )}
       </td>
 
-      <td className="px-2 py-2 w-14">
-        <button
-          onClick={cycleCategory}
-          title="클릭하여 구분 변경"
-          className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors whitespace-nowrap ${CATEGORY_BADGE[currentCategory]}`}
-        >
-          {currentCategory || '구분'}
-        </button>
+      <td className="px-2 py-2">
+        <div className="flex gap-0.5">
+          {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map(cat => (
+            <button
+              key={cat}
+              onClick={() => onSetCategory(student.name, currentCategory === cat ? '' : cat)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold transition-colors whitespace-nowrap ${
+                currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
       </td>
 
       <td className="px-2 py-2">
