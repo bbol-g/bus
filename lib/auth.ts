@@ -12,19 +12,19 @@ async function sign(payload: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function createAuthToken(password: string): Promise<string> {
+export async function createAuthToken(): Promise<string> {
   const exp = Date.now() + 1000 * 60 * 60 * 24 * 30;
-  const payload = `${password}:${exp}`;
+  const payload = `v1:${exp}`;
   return `${payload}.${await sign(payload)}`;
 }
 
-export async function verifyAuthToken(token: string, password: string): Promise<boolean> {
+export async function verifyAuthToken(token: string): Promise<boolean> {
   const [payload, sig] = token.split('.');
   if (!payload || !sig) return false;
   if ((await sign(payload)) !== sig) return false;
-  const [pw, expRaw] = payload.split(':');
+  const [version, expRaw] = payload.split(':');
   const exp = Number(expRaw);
-  if (!pw || !Number.isFinite(exp)) return false;
+  if (version !== 'v1' || !Number.isFinite(exp)) return false;
   if (Date.now() > exp) return false;
-  return pw === password;
+  return true;
 }

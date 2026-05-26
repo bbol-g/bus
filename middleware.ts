@@ -15,7 +15,7 @@ export async function middleware(req: NextRequest) {
 
   // 쿠키 확인
   const cookie = req.cookies.get(COOKIE);
-  if (cookie?.value && await verifyAuthToken(cookie.value, PASSWORD)) return NextResponse.next();
+  if (cookie?.value && await verifyAuthToken(cookie.value)) return NextResponse.next();
 
   // 미인증 → 로그인 페이지로
   const loginUrl = req.nextUrl.clone();

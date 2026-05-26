@@ -87,18 +87,20 @@ export default function Dashboard({ data, onReupload }: Props) {
       });
   }, [selectedDate]);
 
+  function persistChanges(next: DailyChanges) {
+    setChanges(next);
+    fetch('/api/changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: selectedDate, changes: next }),
+    }).catch(console.error);
+  }
+
   function handleToggle(key: string, state: ChangeState | null) {
-    setChanges((prev) => {
-      const next = { ...prev };
-      if (state === null) delete next[key];
-      else next[key] = state;
-      fetch('/api/changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, changes: next }),
-      }).catch(console.error);
-      return next;
-    });
+    const next = { ...changes };
+    if (state === null) delete next[key];
+    else next[key] = state;
+    persistChanges(next);
   }
 
   function handleDelete(studentId: string, isTemp: boolean, bus: BusName, section: string) {
@@ -108,16 +110,9 @@ export default function Dashboard({ data, onReupload }: Props) {
         ...prev,
         [mapKey]: (prev[mapKey] ?? []).filter((s) => s.id !== studentId),
       }));
-      setChanges((prev) => {
-        const next = { ...prev };
-        delete next[studentId];
-        fetch('/api/changes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date: selectedDate, changes: next }),
-        }).catch(console.error);
-        return next;
-      });
+      const next = { ...changes };
+      delete next[studentId];
+      persistChanges(next);
     } else {
       const key = makeChangeKey(bus, section, studentId);
       handleToggle(key, 'absent');
@@ -145,18 +140,11 @@ export default function Dashboard({ data, onReupload }: Props) {
       ...prev,
       [mapKey]: [...(prev[mapKey] ?? []), newStudent],
     }));
-    setChanges((prev) => {
-      const next: DailyChanges = {
-        ...prev,
-        [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section: section as Student['section'], id },
-      };
-      fetch('/api/changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, changes: next }),
-      }).catch(console.error);
-      return next;
-    });
+    const next: DailyChanges = {
+      ...changes,
+      [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section: section as Student['section'], id },
+    };
+    persistChanges(next);
   }
 
   function handleDayOverride(studentKey: string, key: string, newDays: string) {
