@@ -15,9 +15,10 @@ interface Props {
   dayOverrides: Record<string, string>;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean) => void;
-  onSetCategory: (studentName: string, category: StudentCategory) => void;
-  onDayOverride: (key: string, newDays: string) => void;
+  onSetCategory: (studentKey: string, category: StudentCategory) => void;
+  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
   changeKey: string;
+  studentKey: string;
 }
 
 const CATEGORY_ACTIVE: Record<string, string> = {
@@ -134,6 +135,7 @@ export default function StudentRow({
   onSetCategory,
   onDayOverride,
   changeKey,
+  studentKey,
 }: Props) {
   const isAbsent = changeState === 'absent';
   const isIndividual = changeState === 'individual';
@@ -158,7 +160,7 @@ export default function StudentRow({
     const newDays = DAY_OF_WEEK.filter(d =>
       d === day ? !wasActive : matchesDay(effectiveDays, d)
     ).join('');
-    onDayOverride(overrideKey, newDays);
+    onDayOverride(studentKey, overrideKey, newDays);
   }
 
   return (
@@ -194,7 +196,7 @@ export default function StudentRow({
           {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map(cat => (
             <button
               key={cat}
-              onClick={() => onSetCategory(student.name, currentCategory === cat ? '' : cat)}
+              onClick={() => onSetCategory(studentKey, currentCategory === cat ? '' : cat)}
               className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold transition-colors whitespace-nowrap ${
                 currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
               }`}

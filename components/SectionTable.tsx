@@ -5,7 +5,7 @@ import type { Section, BusName, DailyChanges, ChangeState, Student, StudentCateg
 import { PICKUP_SECTIONS } from '@/types';
 import StudentRow from './StudentRow';
 import AddStudentModal from './AddStudentModal';
-import { makeChangeKey } from '@/lib/storage';
+import { makeChangeKey, makeStudentKey } from '@/lib/storage';
 
 interface Props {
   section: Section;
@@ -103,12 +103,13 @@ export default function SectionTable({
                       changeState={changeState}
                       isIndivStudent={bus === '개별'}
                       categoryStore={categoryStore}
-                      dayOverrides={allDayOverrides[student.name] ?? {}}
+                      dayOverrides={allDayOverrides[makeStudentKey(bus, section.name, student.id)] ?? {}}
                       onToggle={onToggle}
                       onDelete={(id, isTemp) => onDelete(id, isTemp, bus, section.name)}
                       onSetCategory={onSetCategory}
-                      onDayOverride={(entryKey, newDays) => onDayOverride(student.name, entryKey, newDays)}
+                      onDayOverride={onDayOverride}
                       changeKey={key}
+                      studentKey={makeStudentKey(bus, section.name, student.id)}
                     />
                   );
                 })}
