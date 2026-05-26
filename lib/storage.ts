@@ -87,6 +87,10 @@ export function makeChangeKey(bus: string, section: string, studentId: string): 
   return `${bus}_${section}_${studentId}`;
 }
 
+export function makeStudentKey(bus: string, section: string, studentId: string): string {
+  return `${bus}||${section}||${studentId}`;
+}
+
 export function setStudentChange(
   changes: DailyChanges,
   key: string,

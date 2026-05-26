@@ -6,6 +6,7 @@ import { DAY_OF_WEEK, PICKUP_SECTIONS } from '@/types';
 import { matchesDay } from '@/lib/dateUtils';
 
 interface Entry {
+  studentId: string;
   bus: string;
   section: string;
   time: string;
@@ -31,6 +32,7 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
       for (const s of section.students) {
         if (s.name === name) {
           entries.push({
+            studentId: s.id,
             bus: bus.name,
             section: section.name,
             time: s.time,
@@ -48,7 +50,7 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
 
 function applyOverrides(entries: Entry[], overrides: Record<string, string>): Entry[] {
   return entries.map(e => {
-    const key = `${e.section}||${e.bus}||${e.overrideSlot}`;
+    const key = `${e.section}||${e.bus}||${e.studentId}||${e.overrideSlot}`;
     if (!(key in overrides)) return e;
     const days = overrides[key];
     return e.overrideSlot === 'mwf'
@@ -234,11 +236,15 @@ export default function SearchPanel({ data }: Props) {
   }, [query, data]);
 
   function handleSelect(name: string) {
-    setSelected(buildSchedule(data, name));
+    const schedule = buildSchedule(data, name);
+    setSelected(schedule);
     setOverrides({});
     setOpen(false);
     setQuery('');
-    fetch(`/api/day-overrides?name=${encodeURIComponent(name)}`)
+    const scopedKey = schedule.entries[0]
+      ? `${schedule.entries[0].section}||${schedule.entries[0].bus}||${schedule.entries[0].studentId}||${schedule.entries[0].overrideSlot}`
+      : '';
+    fetch(`/api/day-overrides?key=${encodeURIComponent(scopedKey)}`)
       .then(r => r.json())
       .then((d: Record<string, string>) => setOverrides(d))
       .catch(() => {});
@@ -247,7 +253,7 @@ export default function SearchPanel({ data }: Props) {
   function handleToggleDayGroup(entries: Entry[], day: DayOfWeek) {
     let newOverrides = { ...overrides };
     for (const entry of entries) {
-      const key = `${entry.section}||${entry.bus}||${entry.overrideSlot}`;
+      const key = `${entry.section}||${entry.bus}||${entry.studentId}||${entry.overrideSlot}`;
       const currentDays = entry.overrideSlot === 'mwf' ? entry.dayMwf : entry.dayTuTh;
       const wasActive = matchesDay(currentDays, day);
       const newDays = DAY_OF_WEEK.filter(d => d === day ? !wasActive : matchesDay(currentDays, d)).join('');
@@ -255,10 +261,13 @@ export default function SearchPanel({ data }: Props) {
     }
     setOverrides(newOverrides);
     if (selected) {
+      const scopedKey = entries[0]
+        ? `${entries[0].section}||${entries[0].bus}||${entries[0].studentId}||${entries[0].overrideSlot}`
+        : '';
       fetch('/api/day-overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: selected.name, overrides: newOverrides }),
+        body: JSON.stringify({ key: scopedKey, overrides: newOverrides }),
       }).catch(() => {});
     }
   }

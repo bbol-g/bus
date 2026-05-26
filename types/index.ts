@@ -17,7 +17,7 @@ export type StudentCategory = 'MK' | 'AK' | '초등' | '';
 
 export type CategoryFilter = '전체' | StudentCategory;
 
-export type CategoryStore = Record<string, StudentCategory>; // key: student name
+export type CategoryStore = Record<string, StudentCategory>; // key: student unique key
 
 export interface Student {
   id: string;
@@ -50,7 +50,18 @@ export interface ShuttleBase {
   uploadedAt: string;
 }
 
-export type DailyChanges = Record<string, ChangeState | { isTemp: true; name: string; place: string; time: string; note: string }>;
+export interface TempStudentChange {
+  isTemp: true;
+  id: string;
+  name: string;
+  place: string;
+  time: string;
+  note: string;
+  bus: BusName;
+  section: SectionType;
+}
+
+export type DailyChanges = Record<string, ChangeState | TempStudentChange>;
 
 export const PICKUP_SECTIONS: SectionType[] = ['9시 30분 등원', '3시 등원', '4시 30분 등원'];
 export const DROPOFF_SECTIONS: SectionType[] = ['3시 하원', '4시 30분 하원', '6시 하원'];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, DayOfWeek, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES, DAY_OF_WEEK } from '@/types';
 import { addDaysToStr, formatDate, getDayOfWeekFromStr, getTodayKorean, getTodayString } from '@/lib/dateUtils';
@@ -87,20 +87,18 @@ export default function Dashboard({ data, onReupload }: Props) {
       });
   }, [selectedDate]);
 
-  const persistChanges = useCallback((next: DailyChanges) => {
-    setChanges(next);
-    fetch('/api/changes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: selectedDate, changes: next }),
-    }).catch(console.error);
-  }, [selectedDate]);
-
   function handleToggle(key: string, state: ChangeState | null) {
-    const next = { ...changes };
-    if (state === null) delete next[key];
-    else next[key] = state;
-    persistChanges(next);
+    setChanges((prev) => {
+      const next = { ...prev };
+      if (state === null) delete next[key];
+      else next[key] = state;
+      fetch('/api/changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, changes: next }),
+      }).catch(console.error);
+      return next;
+    });
   }
 
   function handleDelete(studentId: string, isTemp: boolean, bus: BusName, section: string) {
@@ -110,9 +108,16 @@ export default function Dashboard({ data, onReupload }: Props) {
         ...prev,
         [mapKey]: (prev[mapKey] ?? []).filter((s) => s.id !== studentId),
       }));
-      const next = { ...changes };
-      delete next[studentId];
-      persistChanges(next);
+      setChanges((prev) => {
+        const next = { ...prev };
+        delete next[studentId];
+        fetch('/api/changes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: selectedDate, changes: next }),
+        }).catch(console.error);
+        return next;
+      });
     } else {
       const key = makeChangeKey(bus, section, studentId);
       handleToggle(key, 'absent');
@@ -140,25 +145,32 @@ export default function Dashboard({ data, onReupload }: Props) {
       ...prev,
       [mapKey]: [...(prev[mapKey] ?? []), newStudent],
     }));
-    const next = {
-      ...changes,
-      [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section, id },
-    };
-    persistChanges(next as DailyChanges);
+    setChanges((prev) => {
+      const next: DailyChanges = {
+        ...prev,
+        [id]: { isTemp: true as const, name: student.name, place: student.place, time: student.time, note: student.note, bus, section: section as Student['section'], id },
+      };
+      fetch('/api/changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, changes: next }),
+      }).catch(console.error);
+      return next;
+    });
   }
 
-  function handleDayOverride(studentName: string, key: string, newDays: string) {
-    const studentOverrides = { ...(allDayOverrides[studentName] ?? {}), [key]: newDays };
-    setAllDayOverrides((prev) => ({ ...prev, [studentName]: studentOverrides }));
+  function handleDayOverride(studentKey: string, key: string, newDays: string) {
+    const studentOverrides = { ...(allDayOverrides[studentKey] ?? {}), [key]: newDays };
+    setAllDayOverrides((prev) => ({ ...prev, [studentKey]: studentOverrides }));
     fetch('/api/day-overrides', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: studentName, overrides: studentOverrides }),
+      body: JSON.stringify({ key: studentKey, overrides: studentOverrides }),
     }).catch(console.error);
   }
 
-  function handleSetCategory(studentName: string, category: StudentCategory) {
-    const next = setStudentCategory(categoryStore, studentName, category);
+  function handleSetCategory(studentKey: string, category: StudentCategory) {
+    const next = setStudentCategory(categoryStore, studentKey, category);
     setCategoryStore(next);
     fetch('/api/categories', {
       method: 'POST',
