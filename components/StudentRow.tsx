@@ -140,7 +140,7 @@ export default function StudentRow({
   const isAbsent = changeState === 'absent';
   const isIndividual = changeState === 'individual';
   const isShuttle = changeState === 'shuttle';
-  const currentCategory = categoryStore[student.name] ?? '';
+  const currentCategory = categoryStore[studentKey] ?? '';
 
   let rowClass = 'hover:bg-gray-50';
   if (isAbsent) rowClass = 'bg-gray-100 opacity-60';

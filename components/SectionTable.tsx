@@ -17,8 +17,8 @@ interface Props {
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
-  onSetCategory: (studentName: string, category: StudentCategory) => void;
-  onDayOverride: (studentName: string, key: string, newDays: string) => void;
+  onSetCategory: (studentKey: string, category: StudentCategory) => void;
+  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
   defaultOpen?: boolean;
 }
 

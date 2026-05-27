@@ -4,7 +4,7 @@ import type { BusData, DailyChanges, ChangeState, Student, BusName, StudentCateg
 import SectionTable from './SectionTable';
 import { studentRunsToday } from '@/lib/dateUtils';
 import type { DayOfWeek } from '@/types';
-import { makeChangeKey } from '@/lib/storage';
+import { makeChangeKey, makeStudentKey } from '@/lib/storage';
 
 interface Props {
   bus: BusData;
@@ -16,8 +16,8 @@ interface Props {
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
-  onSetCategory: (studentName: string, category: StudentCategory) => void;
-  onDayOverride: (studentName: string, key: string, newDays: string) => void;
+  onSetCategory: (studentKey: string, category: StudentCategory) => void;
+  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
 }
 
 export default function HoTab({ bus, today, changes, tempStudents, categoryStore, allDayOverrides, onToggle, onDelete, onAddTemp, onSetCategory, onDayOverride }: Props) {
@@ -31,7 +31,7 @@ export default function HoTab({ bus, today, changes, tempStudents, categoryStore
           // 요일 override 적용
           const mwfKey = `${section.name}||${bus.name}||mwf`;
           const tuthKey = `${section.name}||${bus.name}||tuth`;
-          const studentOverrides = allDayOverrides[s.name] ?? {};
+          const studentOverrides = allDayOverrides[makeStudentKey(bus.name, section.name, s.id)] ?? {};
           const effectiveMwf = mwfKey in studentOverrides ? studentOverrides[mwfKey] : s.dayMwf;
           const effectiveTuTh = tuthKey in studentOverrides ? studentOverrides[tuthKey] : s.dayTuTh;
 
