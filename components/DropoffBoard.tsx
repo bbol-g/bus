@@ -2,7 +2,7 @@
 
 import type { BusData, BusName, CategoryFilter, CategoryStore, DailyChanges, DayOfWeek, StudentCategory } from '@/types';
 import { BUS_NAMES, DROPOFF_SECTIONS } from '@/types';
-import { makeChangeKey, makeStudentKey } from '@/lib/storage';
+import { makeChangeKey } from '@/lib/storage';
 import { studentRunsToday } from '@/lib/dateUtils';
 
 interface Props {
@@ -59,7 +59,7 @@ export default function DropoffBoard({ buses, changes, categoryStore, categoryFi
         // Skip deleted temp students
         if (typeof change === 'object' && change !== null) continue;
 
-        const category = categoryStore[makeStudentKey(bus.name, section.name, student.id)] ?? '';
+        const category = categoryStore[student.name] ?? '';
         // Category filter
         if (categoryFilter !== '전체' && category !== categoryFilter) continue;
 
@@ -86,7 +86,7 @@ export default function DropoffBoard({ buses, changes, categoryStore, categoryFi
         if (typeof change === 'object' && change !== null) continue;
         if (change === 'absent') continue;
         counts['전체']++;
-        const cat = categoryStore[makeStudentKey(bus.name, section.name, student.id)] ?? '';
+        const cat = categoryStore[student.name] ?? '';
         if (cat === 'MK') counts['MK']++;
         else if (cat === 'AK') counts['AK']++;
         else if (cat === '초등') counts['초등']++;

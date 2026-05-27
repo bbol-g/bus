@@ -140,7 +140,7 @@ export default function StudentRow({
   const isAbsent = changeState === 'absent';
   const isIndividual = changeState === 'individual';
   const isShuttle = changeState === 'shuttle';
-  const currentCategory = categoryStore[studentKey] ?? '';
+  const currentCategory = categoryStore[student.name] ?? '';
 
   let rowClass = 'hover:bg-gray-50';
   if (isAbsent) rowClass = 'bg-gray-100 opacity-60';
@@ -196,7 +196,7 @@ export default function StudentRow({
           {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map(cat => (
             <button
               key={cat}
-              onClick={() => onSetCategory(studentKey, currentCategory === cat ? '' : cat)}
+              onClick={() => onSetCategory(student.name, currentCategory === cat ? '' : cat)}
               className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold transition-colors whitespace-nowrap ${
                 currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
               }`}
