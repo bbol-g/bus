@@ -37,27 +37,31 @@ function normalizeStudentName(name: string): string {
   return name.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-function normalizeOverlappingSectionDays(sections: Section[]): Section[] {
-  const entriesByStudent = new Map<string, { sectionIndex: number; student: Student }[]>();
+function normalizeOverlappingSectionDays(buses: BusData[]): void {
+  const entriesByStudent = new Map<string, { priority: number; student: Student }[]>();
 
-  sections.forEach((section, sectionIndex) => {
-    const mode = sectionMode(section.name);
-    if (!mode) return;
-    for (const student of section.students) {
-      const key = `${mode}||${normalizeStudentName(student.name)}`;
-      const entries = entriesByStudent.get(key) ?? [];
-      entries.push({ sectionIndex, student });
-      entriesByStudent.set(key, entries);
+  for (const bus of buses) {
+    for (const section of bus.sections) {
+      const mode = sectionMode(section.name);
+      if (!mode) continue;
+      const priority = ALL_SECTIONS.indexOf(section.name);
+      for (const student of section.students) {
+        const key = `${mode}||${normalizeStudentName(student.name)}`;
+        const entries = entriesByStudent.get(key) ?? [];
+        entries.push({ priority, student });
+        entriesByStudent.set(key, entries);
+      }
     }
-  });
+  }
 
   entriesByStudent.forEach((entries) => {
     if (entries.length < 2) return;
-    entries.sort((a, b) => a.sectionIndex - b.sectionIndex);
+    entries.sort((a, b) => a.priority - b.priority);
     const claimedDays = new Set<(typeof WEEK_DAYS)[number]>();
 
-    // 같은 학생이 같은 등원/하원 그룹 안에서 여러 시간대에 있으면 뒤 시간대가 우선한다.
-    // 예: 3시 하원 = 월화수목, 4시 30분 하원 = 금. 3시가 매일로 파싱되어도 금은 뒤 시간대에 남긴다.
+    // 같은 학생이 같은 등원/하원 그룹 안에서 여러 시간대(혹은 다른 호차)에 있으면
+    // 뒤 시간대가 우선한다. 예: 3시 하원 = 월화수목, 4시 30분 하원 = 금이면
+    // 3시가 매일로 파싱되어도 금은 뒤 시간대에 남긴다.
     for (let i = entries.length - 1; i >= 0; i--) {
       const { student } = entries[i];
       student.dayMwf = removeClaimedDays(student.dayMwf, claimedDays);
@@ -69,8 +73,6 @@ function normalizeOverlappingSectionDays(sections: Section[]): Section[] {
       currentDays.forEach((day) => claimedDays.add(day));
     }
   });
-
-  return sections;
 }
 
 function cellStr(row: unknown[], idx: number): string {
@@ -354,10 +356,29 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     // 병렬 배치되어도 각 섹션을 독립 컨텍스트로 파싱한다.
     const headers = findSectionHeaders(row as unknown[]);
     if (headers.length > 0) {
-      flushContexts();
-      contexts = headers.map((header, index) => {
-        const nextHeader = headers[index + 1];
-        return createSectionContext(header.section, header.col, nextHeader?.col ?? Number.POSITIVE_INFINITY);
+      // 새로 발견된 헤더와 같은 시작 열을 가진 컨텍스트만 종료하고,
+      // 다른 병렬 컨텍스트(예: 같은 행에 헤더가 다시 등장하지 않는
+      // "4시 30분 하원")는 그대로 데이터를 이어서 받는다.
+      const headerCols = new Set(headers.map((h) => h.col));
+      const survivors = contexts.filter((ctx) => !headerCols.has(ctx.startCol));
+      const toFlush = contexts.filter((ctx) => headerCols.has(ctx.startCol));
+      for (const ctx of toFlush) sections.push(ctx.section);
+
+      type StartEntry =
+        | { col: number; ctx: SectionContext }
+        | { col: number; header: { section: SectionType; col: number } };
+      const starts: StartEntry[] = [
+        ...survivors.map((ctx) => ({ col: ctx.startCol, ctx })),
+        ...headers.map((header) => ({ col: header.col, header })),
+      ].sort((a, b) => a.col - b.col);
+
+      contexts = starts.map((entry, index) => {
+        const nextCol = starts[index + 1]?.col ?? Number.POSITIVE_INFINITY;
+        if ('header' in entry) {
+          return createSectionContext(entry.header.section, entry.col, nextCol);
+        }
+        entry.ctx.endCol = nextCol;
+        return entry.ctx;
       });
       continue;
     }
@@ -365,7 +386,10 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
     if (contexts.length === 0) continue;
 
     if (contexts.some((ctx) => ctx.headerPending)) {
-      contexts.forEach((ctx) => applyHeaderRow(ctx, row));
+      contexts.forEach((ctx) => {
+        if (ctx.headerPending) applyHeaderRow(ctx, row);
+        else appendStudentsFromRow(sheetName, ctx, row);
+      });
       continue;
     }
 
@@ -373,7 +397,7 @@ function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   }
 
   flushContexts();
-  return { name: sheetName, sections: normalizeOverlappingSectionDays(mergeSectionsByName(sections)) };
+  return { name: sheetName, sections: mergeSectionsByName(sections) };
 }
 
 // 개별등하원 시트 파싱 (선택적)
@@ -443,6 +467,10 @@ function parseWorkbook(wb: XLSX.WorkBook): ShuttleBase {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
     buses.push(parseBusSheet(sheetName, rows));
   }
+
+  // 같은 학생이 다른 호차/시간대의 등원 또는 하원 섹션에 중복으로 들어간
+  // 경우, 호차 전체 기준으로 요일 겹침을 정리한다.
+  normalizeOverlappingSectionDays(buses);
 
   const indivWs = wb.Sheets['개별등하원'];
   if (indivWs) {
