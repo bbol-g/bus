@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseExcelBuffer } from '@/lib/excelParser';
-import { writeBase } from '@/lib/serverStorage';
+import { writeBase, writeRawExcel } from '@/lib/serverStorage';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(bytes);
     const data = parseExcelBuffer(buffer);
     await writeBase(data);
+    await writeRawExcel(buffer.toString('base64'));
     return NextResponse.json(data);
   } catch (e) {
     console.error(e);
