@@ -123,7 +123,8 @@ function normalizeSection(value: string): string {
 }
 
 function isSectionHeader(value: string): SectionType | null {
-  const normalized = normalizeSection(value);
+  // "3호차 3시 하원"처럼 호차 번호가 섹션명 앞에 붙어 있는 경우 제거하고 비교
+  const normalized = normalizeSection(value).replace(/^\d*\s*호차\s*/, '');
   if (ALL_SECTIONS.includes(normalized as SectionType)) return normalized as SectionType;
 
   // 공백 없이 붙어있는 경우도 허용 (예: "3시하원" → "3시 하원")
@@ -148,6 +149,13 @@ function isHeaderValue(v: string): boolean {
   // 요일+시간 패턴: '금 3:08', '화3:10', '목 15:00' 등
   if (/^[월화수목금]\s*\d{1,2}:\d{2}/.test(v)) return true;
   return false;
+}
+
+// '이름(화목)' 칸에 이름 대신 "화목3:08", "화목3:12 금3:18"처럼
+// 요일+시간 정보만 적혀 있는 경우 (같은 학생의 화목 시간을 별도 표기한 것일 뿐
+// 별도 학생이 아님) 판별
+function isDayTimeOnly(v: string): boolean {
+  return /^([월화수목금]+\s*\d{1,2}:\d{2}\s*)+$/.test(v);
 }
 
 interface ColumnMap {
@@ -265,8 +273,12 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
   const timeMwfStr = ctx.lastTimeMwf;
   const placeStr = ctx.lastPlace;
 
-  const hasMwf = nameMwf && !isHeaderValue(nameMwf);
-  const hasTuTh = nameTuTh && !isHeaderValue(nameTuTh);
+  // 요일 칸이 "5 김하준 Ryan"처럼 다른 학생 이름/번호가 잘못 들어간 경우
+  // (예: 호차 합승표) 해당 칸은 요일 정보로 쓸 수 없으므로 행을 건너뛴다.
+  const isValidDayValue = dayMwf === '' || dayMwf === '매일' || /^[월화수목금]+$/.test(dayMwf);
+
+  const hasMwf = !!nameMwf && !isHeaderValue(nameMwf) && isValidDayValue;
+  const hasTuTh = nameTuTh && !isHeaderValue(nameTuTh) && !isDayTimeOnly(nameTuTh);
 
   // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
   if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
