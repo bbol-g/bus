@@ -15,9 +15,10 @@ interface Props {
   dayOverrides: Record<string, string>;
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean) => void;
-  onSetCategory: (studentName: string, category: StudentCategory) => void;
-  onDayOverride: (key: string, newDays: string) => void;
+  onSetCategory: (studentKey: string, category: StudentCategory) => void;
+  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
   changeKey: string;
+  studentKey: string;
 }
 
 const CATEGORY_ACTIVE: Record<string, string> = {
@@ -134,11 +135,12 @@ export default function StudentRow({
   onSetCategory,
   onDayOverride,
   changeKey,
+  studentKey,
 }: Props) {
   const isAbsent = changeState === 'absent';
   const isIndividual = changeState === 'individual';
   const isShuttle = changeState === 'shuttle';
-  const currentCategory = categoryStore[student.name] ?? '';
+  const currentCategory = categoryStore[studentKey] ?? '';
 
   let rowClass = 'hover:bg-gray-50';
   if (isAbsent) rowClass = 'bg-gray-100 opacity-60';
@@ -149,16 +151,26 @@ export default function StudentRow({
 
   const overrideKey = `${section}||${bus}||${student.dayMwf ? 'mwf' : 'tuth'}`;
   const isOverridden = overrideKey in dayOverrides;
-  const effectiveDays = isOverridden
-    ? dayOverrides[overrideKey]
-    : (student.dayMwf || student.dayTuTh || '');
+  const effectiveMwf = `${section}||${bus}||mwf` in dayOverrides
+    ? dayOverrides[`${section}||${bus}||mwf`]
+    : student.dayMwf;
+  const effectiveTuTh = `${section}||${bus}||tuth` in dayOverrides
+    ? dayOverrides[`${section}||${bus}||tuth`]
+    : student.dayTuTh;
+  const effectiveDays = (() => {
+    const mwf = effectiveMwf?.trim() ?? '';
+    const tuth = effectiveTuTh?.trim() ?? '';
+    if (mwf && tuth && mwf !== tuth) return `${mwf}/${tuth}`;
+    return mwf || tuth || '';
+  })();
 
   function toggleDay(day: DayOfWeek) {
-    const wasActive = matchesDay(effectiveDays, day);
+    const activeSource = (effectiveMwf || effectiveTuTh || '').trim();
+    const wasActive = matchesDay(activeSource, day);
     const newDays = DAY_OF_WEEK.filter(d =>
-      d === day ? !wasActive : matchesDay(effectiveDays, d)
+      d === day ? !wasActive : matchesDay(activeSource, d)
     ).join('');
-    onDayOverride(overrideKey, newDays);
+    onDayOverride(studentKey, overrideKey, newDays);
   }
 
   return (
@@ -194,7 +206,7 @@ export default function StudentRow({
           {(['MK', 'AK', '초등'] as Exclude<StudentCategory, ''>[]).map(cat => (
             <button
               key={cat}
-              onClick={() => onSetCategory(student.name, currentCategory === cat ? '' : cat)}
+              onClick={() => onSetCategory(studentKey, currentCategory === cat ? '' : cat)}
               className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold transition-colors whitespace-nowrap ${
                 currentCategory === cat ? CATEGORY_ACTIVE[cat] : CATEGORY_INACTIVE
               }`}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DayOfWeek, ShuttleBase } from '@/types';
 import { DAY_OF_WEEK, PICKUP_SECTIONS } from '@/types';
 import { matchesDay } from '@/lib/dateUtils';
+import { makeStudentKey } from '@/lib/storage';
 
 interface Entry {
   bus: string;
@@ -17,6 +18,7 @@ interface Entry {
 
 interface StudentSchedule {
   name: string;
+  studentKey: string;
   entries: Entry[];
 }
 
@@ -25,11 +27,17 @@ interface Props {
 }
 
 function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
+  let targetId: string | null = null;
+  let targetKey = '';
   const entries: Entry[] = [];
   for (const bus of data.buses) {
     for (const section of bus.sections) {
       for (const s of section.students) {
-        if (s.name === name) {
+        if (s.name === name && targetId === null) {
+          targetId = s.id;
+          targetKey = makeStudentKey(bus.name, section.name, s.id);
+        }
+        if (s.name === name && s.id === targetId) {
           entries.push({
             bus: bus.name,
             section: section.name,
@@ -43,7 +51,7 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
       }
     }
   }
-  return { name, entries };
+  return { name, studentKey: targetKey, entries };
 }
 
 function applyOverrides(entries: Entry[], overrides: Record<string, string>): Entry[] {
@@ -234,11 +242,12 @@ export default function SearchPanel({ data }: Props) {
   }, [query, data]);
 
   function handleSelect(name: string) {
-    setSelected(buildSchedule(data, name));
+    const schedule = buildSchedule(data, name);
+    setSelected(schedule);
     setOverrides({});
     setOpen(false);
     setQuery('');
-    fetch(`/api/day-overrides?name=${encodeURIComponent(name)}`)
+    fetch(`/api/day-overrides?key=${encodeURIComponent(schedule.studentKey)}`)
       .then(r => r.json())
       .then((d: Record<string, string>) => setOverrides(d))
       .catch(() => {});
@@ -258,7 +267,7 @@ export default function SearchPanel({ data }: Props) {
       fetch('/api/day-overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: selected.name, overrides: newOverrides }),
+        body: JSON.stringify({ key: selected.studentKey, overrides: newOverrides }),
       }).catch(() => {});
     }
   }
