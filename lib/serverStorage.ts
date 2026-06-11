@@ -83,3 +83,15 @@ export async function writeDayOverrides(data: unknown): Promise<void> {
   if (USE_KV) return kvSet('day_overrides', data);
   fsWrite('day_overrides.json', data);
 }
+
+// 업로드된 원본 엑셀(base64)을 보관해, 파서 로직이 바뀌면 저장된 결과를
+// 재업로드 없이 원본으로부터 다시 파싱할 수 있게 한다.
+export async function readRawExcel(): Promise<string | null> {
+  if (USE_KV) return kvGet<string>('raw_excel');
+  return fsRead<string | null>('raw_excel.json', null);
+}
+
+export async function writeRawExcel(base64: string): Promise<void> {
+  if (USE_KV) return kvSet('raw_excel', base64);
+  fsWrite('raw_excel.json', base64);
+}

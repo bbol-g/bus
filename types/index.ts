@@ -48,6 +48,7 @@ export interface BusData {
 export interface ShuttleBase {
   buses: BusData[];
   uploadedAt: string;
+  parserVersion?: number;
 }
 
 export interface TempStudentChange {

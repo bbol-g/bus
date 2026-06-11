@@ -2,6 +2,10 @@ import * as XLSX from 'xlsx';
 import type { BusData, BusName, Section, SectionType, ShuttleBase, Student } from '@/types';
 import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
+// 파싱 로직이 바뀔 때마다 올려서, 저장된 데이터를 원본 엑셀로부터
+// 자동으로 다시 파싱하도록 트리거한다.
+export const PARSER_VERSION = 2;
+
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
 
@@ -493,5 +497,6 @@ function parseWorkbook(wb: XLSX.WorkBook): ShuttleBase {
   return {
     buses,
     uploadedAt: new Date().toISOString(),
+    parserVersion: PARSER_VERSION,
   };
 }
