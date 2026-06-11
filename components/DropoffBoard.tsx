@@ -2,7 +2,7 @@
 
 import type { BusData, BusName, CategoryFilter, CategoryStore, DailyChanges, DayOfWeek, StudentCategory } from '@/types';
 import { BUS_NAMES, DROPOFF_SECTIONS } from '@/types';
-import { makeChangeKey } from '@/lib/storage';
+import { makeChangeKey, makeStudentKey } from '@/lib/storage';
 import { studentRunsToday } from '@/lib/dateUtils';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   categoryFilter: CategoryFilter;
   today: DayOfWeek;
   tempStudents: Record<string, import('@/types').Student[]>;
+  allDayOverrides: Record<string, Record<string, string>>;
 }
 
 const CATEGORY_COLOR: Record<Exclude<StudentCategory, ''>, string> = {
@@ -26,7 +27,7 @@ const SECTION_LABELS: Record<string, string> = {
   '6시 하원': '6시 하원',
 };
 
-export default function DropoffBoard({ buses, changes, categoryStore, categoryFilter, today, tempStudents }: Props) {
+export default function DropoffBoard({ buses, changes, categoryStore, categoryFilter, today, tempStudents, allDayOverrides }: Props) {
   // For each dropoff section × each bus, collect active students
   type StudentEntry = { name: string; isAbsent: boolean; category: StudentCategory };
   type BoardData = Record<string, Record<BusName, StudentEntry[]>>; // section → bus → students
@@ -55,7 +56,13 @@ export default function DropoffBoard({ buses, changes, categoryStore, categoryFi
         // Skip 개별 bus students unless changed to shuttle
         if (bus.name === '개별' && change !== 'shuttle') continue;
         // Day filter (temp students always show)
-        if (!student.isTemp && !studentRunsToday(student.dayMwf, student.dayTuTh, today)) continue;
+        if (!student.isTemp) {
+          const studentKey = makeStudentKey(bus.name, section.name, student.id);
+          const overrideMap = allDayOverrides[studentKey] ?? {};
+          const effectiveMwf = `${section.name}||${bus.name}||mwf` in overrideMap ? overrideMap[`${section.name}||${bus.name}||mwf`] : student.dayMwf;
+          const effectiveTuTh = `${section.name}||${bus.name}||tuth` in overrideMap ? overrideMap[`${section.name}||${bus.name}||tuth`] : student.dayTuTh;
+          if (!studentRunsToday(effectiveMwf, effectiveTuTh, today)) continue;
+        }
         // Skip deleted temp students
         if (typeof change === 'object' && change !== null) continue;
 
@@ -82,7 +89,13 @@ export default function DropoffBoard({ buses, changes, categoryStore, categoryFi
         const change = changes[key];
         if (change === 'individual') continue;
         if (bus.name === '개별' && change !== 'shuttle') continue;
-        if (!student.isTemp && !studentRunsToday(student.dayMwf, student.dayTuTh, today)) continue;
+        if (!student.isTemp) {
+          const studentKey = makeStudentKey(bus.name, section.name, student.id);
+          const overrideMap = allDayOverrides[studentKey] ?? {};
+          const effectiveMwf = `${section.name}||${bus.name}||mwf` in overrideMap ? overrideMap[`${section.name}||${bus.name}||mwf`] : student.dayMwf;
+          const effectiveTuTh = `${section.name}||${bus.name}||tuth` in overrideMap ? overrideMap[`${section.name}||${bus.name}||tuth`] : student.dayTuTh;
+          if (!studentRunsToday(effectiveMwf, effectiveTuTh, today)) continue;
+        }
         if (typeof change === 'object' && change !== null) continue;
         if (change === 'absent') continue;
         counts['전체']++;

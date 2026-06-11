@@ -330,6 +330,7 @@ export default function Dashboard({ data, onReupload }: Props) {
                 categoryFilter={categoryFilter}
                 today={viewDay}
                 tempStudents={tempStudents}
+                allDayOverrides={allDayOverrides}
               />
             </>
           )}
