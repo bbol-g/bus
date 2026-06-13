@@ -4,7 +4,7 @@ import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
 // 파싱 로직이 바뀔 때마다 올려서, 저장된 데이터를 원본 엑셀로부터
 // 자동으로 다시 파싱하도록 트리거한다.
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 3;
 
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
@@ -39,6 +39,25 @@ function sectionMode(section: SectionType): 'pickup' | 'dropoff' | null {
 
 function normalizeStudentName(name: string): string {
   return name.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// 학생을 영구 삭제할 때 사용하는 식별자. 재파싱 시에도 같은 학생을
+// 다시 걸러낼 수 있도록 호차/섹션/이름 기준으로 식별한다.
+export function studentIdentityKey(bus: string, section: string, name: string): string {
+  return `${bus}||${section}||${normalizeStudentName(name)}`;
+}
+
+// 영구 삭제된 학생을 파싱 결과에서 제거한다.
+export function applyDeletedStudents(data: ShuttleBase, deletedKeys: string[]): void {
+  if (deletedKeys.length === 0) return;
+  const deleted = new Set(deletedKeys);
+  for (const bus of data.buses) {
+    for (const section of bus.sections) {
+      section.students = section.students.filter(
+        (s) => !deleted.has(studentIdentityKey(bus.name, section.name, s.name))
+      );
+    }
+  }
 }
 
 function normalizeOverlappingSectionDays(buses: BusData[]): void {
