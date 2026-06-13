@@ -240,6 +240,7 @@ export default function StudentRow({
           <button
             onClick={() => onDelete(student.id, student.isTemp ?? false)}
             className="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+            title={student.isTemp ? '오늘 임시로 추가한 학생을 목록에서 제거합니다' : '명단에서 영구 삭제합니다 (결석과 다름)'}
           >
             삭제
           </button>

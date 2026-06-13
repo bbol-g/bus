@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseExcelBuffer } from '@/lib/excelParser';
-import { writeBase, writeRawExcel } from '@/lib/serverStorage';
+import { writeBase, writeDeletedStudents, writeRawExcel } from '@/lib/serverStorage';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
     const data = parseExcelBuffer(buffer);
     await writeBase(data);
     await writeRawExcel(buffer.toString('base64'));
+    // 새 원본 엑셀이므로 이전에 영구 삭제했던 학생 목록은 더 이상 유효하지 않다.
+    await writeDeletedStudents([]);
     return NextResponse.json(data);
   } catch (e) {
     console.error(e);

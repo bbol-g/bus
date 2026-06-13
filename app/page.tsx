@@ -31,5 +31,5 @@ export default function Home() {
     return <ExcelUploader onUploaded={(d) => setData(d)} />;
   }
 
-  return <Dashboard data={data} onReupload={(d) => setData(d)} />;
+  return <Dashboard data={data} onReupload={(d) => setData(d)} onDataChange={(d) => setData(d)} />;
 }

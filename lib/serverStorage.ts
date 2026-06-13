@@ -95,3 +95,14 @@ export async function writeRawExcel(base64: string): Promise<void> {
   if (USE_KV) return kvSet('raw_excel', base64);
   fsWrite('raw_excel.json', base64);
 }
+
+// 영구 삭제된 학생 식별자 목록. 재파싱 시에도 다시 걸러내기 위해 보관한다.
+export async function readDeletedStudents(): Promise<string[]> {
+  if (USE_KV) return (await kvGet<string[]>('deleted_students')) ?? [];
+  return fsRead<string[]>('deleted_students.json', []);
+}
+
+export async function writeDeletedStudents(data: string[]): Promise<void> {
+  if (USE_KV) return kvSet('deleted_students', data);
+  fsWrite('deleted_students.json', data);
+}

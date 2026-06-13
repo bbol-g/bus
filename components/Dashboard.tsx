@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, DayOfWeek, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES, DAY_OF_WEEK } from '@/types';
 import { addDaysToStr, formatDate, getDayOfWeekFromStr, getTodayKorean, getTodayString } from '@/lib/dateUtils';
-import { makeChangeKey, setStudentCategory } from '@/lib/storage';
+import { setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
 import SearchPanel from './SearchPanel';
@@ -26,9 +26,10 @@ const CATEGORY_INACTIVE_STYLE = 'bg-white text-gray-600 border border-gray-300 h
 interface Props {
   data: ShuttleBase;
   onReupload: (data: ShuttleBase) => void;
+  onDataChange: (data: ShuttleBase) => void;
 }
 
-export default function Dashboard({ data, onReupload }: Props) {
+export default function Dashboard({ data, onReupload, onDataChange }: Props) {
   const [mode, setMode] = useState<AppMode>('manage');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
   const [manageTab, setManageTab] = useState<ManageTab>('전체');
@@ -114,8 +115,17 @@ export default function Dashboard({ data, onReupload }: Props) {
       delete next[studentId];
       persistChanges(next);
     } else {
-      const key = makeChangeKey(bus, section, studentId);
-      handleToggle(key, 'absent');
+      if (!confirm('이 학생을 명단에서 영구 삭제합니다. (엑셀 재업로드 전까지 복구되지 않습니다)\n계속할까요?')) return;
+      fetch('/api/students/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bus, section, studentId }),
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((updated: ShuttleBase | null) => {
+          if (updated) onDataChange(updated);
+        })
+        .catch(console.error);
     }
   }
 

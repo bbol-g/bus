@@ -66,7 +66,8 @@ export type DailyChanges = Record<string, ChangeState | TempStudentChange>;
 
 export const PICKUP_SECTIONS: SectionType[] = ['9시 30분 등원', '3시 등원', '4시 30분 등원'];
 export const DROPOFF_SECTIONS: SectionType[] = ['3시 하원', '4시 30분 하원', '6시 하원'];
-export const ALL_SECTIONS: SectionType[] = [...PICKUP_SECTIONS, ...DROPOFF_SECTIONS];
+// 시간순 표시 순서 (버스 관리 탭의 섹션 표시 순서)
+export const ALL_SECTIONS: SectionType[] = ['9시 30분 등원', '3시 등원', '3시 하원', '4시 30분 등원', '4시 30분 하원', '6시 하원'];
 export const BUS_NAMES: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차', '개별'];
 export const DAY_OF_WEEK: DayOfWeek[] = ['월', '화', '수', '목', '금'];
 export const CATEGORY_LABELS: Record<Exclude<StudentCategory, ''>, string> = { MK: 'MK', AK: 'AK', '초등': '초등' };
