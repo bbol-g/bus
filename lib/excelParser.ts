@@ -1,27 +1,115 @@
 import * as XLSX from 'xlsx';
 import type { BusData, BusName, Section, SectionType, ShuttleBase, Student } from '@/types';
-import { ALL_SECTIONS } from '@/types';
+import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
 
-// 실제 엑셀 컬럼 구조 (0-based, A열은 항상 빈칸)
-// A(0)=empty, B(1)=시간(월수금), C(2)=장소, D(3)=이름(월수금), E(4)=요일(월수금),
-// F(5)=시간(화목), G(6)=이름(화목)
-const COL = {
-  TIME_MWF: 1,
-  PLACE: 2,
-  NAME_MWF: 3,
-  DAY_MWF: 4,
-  TIME_TUTH: 5,
-  NAME_TUTH: 6,
-  NOTE: 7,
-};
+
+const WEEK_DAYS = ['월', '화', '수', '목', '금'] as const;
+type WeekDay = (typeof WEEK_DAYS)[number];
+
+function expandDayValue(value: string): Set<WeekDay> {
+  const trimmed = value.trim();
+  if (!trimmed) return new Set();
+  if (trimmed === '매일') return new Set(WEEK_DAYS);
+  return new Set(WEEK_DAYS.filter((day) => trimmed.includes(day)));
+}
+
+function serializeDays(days: Set<WeekDay>): string {
+  if (days.size === 0) return '';
+  const ordered = WEEK_DAYS.filter((day) => days.has(day));
+  return ordered.length === WEEK_DAYS.length ? '매일' : ordered.join('');
+}
+
+function removeClaimedDays(value: string, claimedDays: Set<WeekDay>): string {
+  const days = expandDayValue(value);
+  claimedDays.forEach((day) => days.delete(day));
+  return serializeDays(days);
+}
+
+function sectionMode(section: SectionType): 'pickup' | 'dropoff' | null {
+  if (PICKUP_SECTIONS.includes(section)) return 'pickup';
+  if (DROPOFF_SECTIONS.includes(section)) return 'dropoff';
+  return null;
+}
+
+function normalizeStudentName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function normalizePlace(place: string): string {
+  return place.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function normalizeOverlappingSectionDays(sections: Section[]): Section[] {
+  const entriesByStudent = new Map<string, { sectionIndex: number; student: Student }[]>();
+
+  sections.forEach((section, sectionIndex) => {
+    const mode = sectionMode(section.name);
+    if (!mode) return;
+    for (const student of section.students) {
+      const key = `${mode}||${normalizeStudentName(student.name)}||${normalizePlace(student.place)}`;
+      const entries = entriesByStudent.get(key) ?? [];
+      entries.push({ sectionIndex, student });
+      entriesByStudent.set(key, entries);
+    }
+  });
+
+  entriesByStudent.forEach((entries) => {
+    if (entries.length < 2) return;
+    entries.sort((a, b) => a.sectionIndex - b.sectionIndex);
+    const claimedDays = new Set<WeekDay>();
+
+    // 같은 학생이 같은 등원/하원 그룹 안에서 여러 시간대에 있으면 뒤 시간대가 우선한다.
+    // 예: 3시 하원 = 월화수목, 4시 30분 하원 = 금. 3시가 매일로 파싱되어도 금은 뒤 시간대에 남긴다.
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const { student } = entries[i];
+      student.dayMwf = removeClaimedDays(student.dayMwf, claimedDays);
+      student.dayTuTh = removeClaimedDays(student.dayTuTh, claimedDays);
+
+      const currentDays = new Set<WeekDay>();
+      expandDayValue(student.dayMwf).forEach((day) => currentDays.add(day));
+      expandDayValue(student.dayTuTh).forEach((day) => currentDays.add(day));
+      currentDays.forEach((day) => claimedDays.add(day));
+    }
+  });
+
+  return sections;
+}
 
 function cellStr(row: unknown[], idx: number): string {
   const v = (row as (string | number | boolean | null | undefined)[])[idx];
   if (v == null || v === '') return '';
   return String(v).trim();
+}
+
+function isDateString(value: string): boolean {
+  return /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(value)
+    && /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(value)
+    && (value.includes('GMT') || value.includes('Coordinated Universal Time'));
+}
+
+function isTimeLikeString(value: string): boolean {
+  return /^\d{1,2}:\d{2}(?::\d{2})?$/.test(value)
+    || /^[월화수목금]\s*\d{1,2}:\d{2}/.test(value);
+}
+
+function isInvalidNameValue(value: string): boolean {
+  if (!value) return true;
+  if (isHeaderValue(value)) return true;
+  if (isDateString(value)) return true;
+  if (isTimeLikeString(value)) return true;
+  return false;
+}
+
+function cellName(row: unknown[], idx: number): string {
+  const raw = (row as unknown[])[idx];
+  if (raw == null || raw === '' || raw instanceof Date || typeof raw === 'number' || typeof raw === 'boolean') {
+    return '';
+  }
+  const value = String(raw).trim();
+  return isInvalidNameValue(value) ? '' : value;
 }
 
 // Excel 시간값(소수) 또는 Date를 HH:MM 문자열로 변환
@@ -93,160 +181,250 @@ function isHeaderValue(v: string): boolean {
   return false;
 }
 
+interface ColumnMap {
+  timeMwf: number;
+  place: number;
+  nameMwf: number;
+  dayMwf: number;
+  timeTuTh: number;
+  nameTuTh: number;
+  note: number;
+}
+
+interface SectionContext {
+  section: Section;
+  startCol: number;
+  endCol: number;
+  headerPending: boolean;
+  hasHeader: boolean;
+  hasNameColumn: boolean;
+  studentIdx: number;
+  lastTimeMwf: string;
+  lastPlace: string;
+  columns: ColumnMap;
+}
+
+function defaultColumns(startCol: number): ColumnMap {
+  // 기존 템플릿은 B~H(1~7)를 사용한다. 섹션 헤더가 다른 열에서 시작하는
+  // 병렬 표도 같은 상대 위치로 읽을 수 있게 startCol 기준 기본값을 둔다.
+  return {
+    timeMwf: startCol,
+    place: startCol + 1,
+    nameMwf: startCol + 2,
+    dayMwf: startCol + 3,
+    timeTuTh: startCol + 4,
+    nameTuTh: startCol + 5,
+    note: startCol + 6,
+  };
+}
+
+function findSectionHeaders(row: unknown[]): { section: SectionType; col: number }[] {
+  const matches: { section: SectionType; col: number }[] = [];
+  for (let i = 0; i < row.length; i++) {
+    const section = isSectionHeader(cellStr(row, i));
+    if (section) matches.push({ section, col: i });
+  }
+  return matches;
+}
+
+function createSectionContext(section: SectionType, startCol: number, endCol: number): SectionContext {
+  return {
+    section: { name: section, students: [] },
+    startCol,
+    endCol,
+    headerPending: true,
+    hasHeader: false,
+    hasNameColumn: false,
+    studentIdx: 0,
+    lastTimeMwf: '',
+    lastPlace: '',
+    columns: defaultColumns(startCol),
+  };
+}
+
+function applyHeaderRow(ctx: SectionContext, row: unknown[]): void {
+  const cells = (row as (string | number | boolean | null | undefined)[]).map(c => String(c ?? '').trim());
+  let timeSeen = 0;
+  let nameSeen = 0;
+  let sawHeaderCell = false;
+  for (let i = ctx.startCol; i < Math.min(ctx.endCol, cells.length); i++) {
+    const v = cells[i];
+    if (!v) continue;
+    if (v === '시간(월수금)') {
+      ctx.columns.timeMwf = i;
+      sawHeaderCell = true;
+    } else if (v === '시간(화목)') {
+      ctx.columns.timeTuTh = i;
+      sawHeaderCell = true;
+    } else if (v === '시간') {
+      if (timeSeen === 0) ctx.columns.timeMwf = i; else ctx.columns.timeTuTh = i;
+      timeSeen++;
+      sawHeaderCell = true;
+    } else if (v === '장소') {
+      ctx.columns.place = i;
+      sawHeaderCell = true;
+    } else if (v === '이름(월수금)') {
+      ctx.columns.nameMwf = i; nameSeen++;
+      sawHeaderCell = true;
+    } else if (v === '이름(화목)') {
+      ctx.columns.nameTuTh = i; nameSeen++;
+      sawHeaderCell = true;
+    } else if (v === '이름' || v.startsWith('이름(')) {
+      if (nameSeen === 0) ctx.columns.nameMwf = i; else ctx.columns.nameTuTh = i;
+      nameSeen++;
+      sawHeaderCell = true;
+    } else if (v === '요일' || v.startsWith('요일(')) {
+      ctx.columns.dayMwf = i;
+      sawHeaderCell = true;
+    } else if (v === '비고' || v === '특이사항') {
+      ctx.columns.note = i;
+      sawHeaderCell = true;
+    }
+  }
+  ctx.hasHeader = sawHeaderCell;
+  ctx.hasNameColumn = nameSeen > 0;
+  ctx.headerPending = false;
+}
+
+function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unknown[]): void {
+  if (!ctx.hasHeader || !ctx.hasNameColumn) return;
+
+  const { columns } = ctx;
+  const isInContext = (idx: number) => idx >= ctx.startCol && idx < ctx.endCol;
+  const rawInContext = (idx: number) => isInContext(idx) ? (row as unknown[])[idx] : '';
+  const cellInContext = (idx: number) => isInContext(idx) ? cellStr(row, idx) : '';
+  const nameInContext = (idx: number) => isInContext(idx) ? cellName(row, idx) : '';
+
+  const rawTimeMwf = rawInContext(columns.timeMwf);
+  const rawPlace   = cellInContext(columns.place);
+  const nameMwf    = nameInContext(columns.nameMwf);
+  const dayMwf     = cellInContext(columns.dayMwf);
+  const rawTimeTuTh = rawInContext(columns.timeTuTh);
+  const nameTuTh   = nameInContext(columns.nameTuTh);
+  const note       = cellInContext(columns.note);
+
+  // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
+  const headerCellCount = [nameMwf, nameTuTh, cellInContext(columns.timeMwf), rawPlace].filter(v => isHeaderValue(String(v))).length;
+  if (headerCellCount >= 2) return;
+
+  // 시간/장소 승계 (빈 셀이면 이전 값 사용)
+  if (rawTimeMwf != null && rawTimeMwf !== '') ctx.lastTimeMwf = formatExcelTime(rawTimeMwf);
+  if (rawPlace) ctx.lastPlace = rawPlace;
+
+  const timeMwfStr = ctx.lastTimeMwf;
+  const placeStr = ctx.lastPlace;
+
+  const hasMwf = !!nameMwf;
+  const hasTuTh = !!nameTuTh;
+
+  // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
+  if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
+    const timeTuThStr = formatExcelTime(rawTimeTuTh);
+    const tuThDay = inferTuThDay(dayMwf, cellInContext(columns.timeTuTh));
+    ctx.section.students.push({
+      id: generateId(sheetName, ctx.section.name, nameMwf, ctx.studentIdx++),
+      name: nameMwf,
+      time: timeMwfStr,
+      place: placeStr,
+      contact: '',
+      note,
+      dayMwf: dayMwf || '매일',
+      timeTuTh: timeTuThStr,
+      dayTuTh: tuThDay,
+      bus: sheetName,
+      section: ctx.section.name,
+    });
+    return;
+  }
+
+  // ① 월수금 학생
+  if (hasMwf) {
+    ctx.section.students.push({
+      id: generateId(sheetName, ctx.section.name, nameMwf, ctx.studentIdx++),
+      name: nameMwf,
+      time: timeMwfStr,
+      place: placeStr,
+      contact: '',
+      note,
+      dayMwf: dayMwf || '매일',
+      timeTuTh: '',
+      dayTuTh: '',
+      bus: sheetName,
+      section: ctx.section.name,
+    });
+  }
+
+  // ② 화목 학생
+  if (hasTuTh) {
+    const timeTuThStr = formatExcelTime(rawTimeTuTh);
+    const tuThDay = inferTuThDay(dayMwf, cellInContext(columns.timeTuTh));
+
+    ctx.section.students.push({
+      id: generateId(sheetName, ctx.section.name, nameTuTh, ctx.studentIdx++),
+      name: nameTuTh,
+      time: timeTuThStr,
+      place: placeStr,
+      contact: '',
+      note,
+      dayMwf: '',
+      timeTuTh: timeTuThStr,
+      dayTuTh: tuThDay,
+      bus: sheetName,
+      section: ctx.section.name,
+    });
+  }
+}
+
+function mergeSectionsByName(sections: Section[]): Section[] {
+  const byName = new Map<SectionType, Section>();
+  for (const section of sections) {
+    const existing = byName.get(section.name);
+    if (existing) existing.students.push(...section.students);
+    else byName.set(section.name, { name: section.name, students: [...section.students] });
+  }
+  return ALL_SECTIONS.flatMap((sectionName) => {
+    const section = byName.get(sectionName);
+    return section ? [section] : [];
+  });
+}
+
 function parseBusSheet(sheetName: BusName, rows: unknown[][]): BusData {
   const sections: Section[] = [];
-  let currentSection: Section | null = null;
-  let headerSkip = false;
-  let studentIdx = 0;
-  let lastTimeMwf = '';
-  let lastPlace = '';
+  let contexts: SectionContext[] = [];
 
-  // 컬럼 위치 — 헤더 행에서 동적 감지 (기본값은 COL 상수)
-  let colTimeMwf = COL.TIME_MWF;
-  let colPlace    = COL.PLACE;
-  let colNameMwf  = COL.NAME_MWF;
-  let colDayMwf   = COL.DAY_MWF;
-  let colTimeTuTh = COL.TIME_TUTH;
-  let colNameTuTh = COL.NAME_TUTH;
-  let colNote     = COL.NOTE;
+  function flushContexts() {
+    for (const ctx of contexts) sections.push(ctx.section);
+    contexts = [];
+  }
 
   for (const row of rows) {
     if ((row as unknown[]).every((c) => c == null || c === '')) continue;
 
-    // 섹션 헤더 탐지: B열(index 1) 우선, 없으면 A열(index 0)도 확인
-    const col1Str = cellStr(row, 1);
-    const col0Str = cellStr(row, 0);
-    const sectionMatch = isSectionHeader(col1Str) ?? isSectionHeader(col0Str);
-
-    if (sectionMatch) {
-      if (currentSection) sections.push(currentSection);
-      currentSection = { name: sectionMatch, students: [] };
-      headerSkip = true;
-      studentIdx = 0;
-      lastTimeMwf = '';
-      lastPlace = '';
-      continue;
-    }
-
-    // 섹션 헤더 직후의 컬럼명 행: 모든 컬럼 위치 동적 감지
-    if (headerSkip) {
-      headerSkip = false;
-      const cells = (row as (string | number | boolean | null | undefined)[]).map(c => String(c ?? '').trim());
-      let timeSeen = 0;
-      let nameSeen = 0;
-      for (let i = 0; i < cells.length; i++) {
-        const v = cells[i];
-        if (!v) continue;
-        if (v === '시간(월수금)') {
-          colTimeMwf = i;
-        } else if (v === '시간(화목)') {
-          colTimeTuTh = i;
-        } else if (v === '시간') {
-          if (timeSeen === 0) colTimeMwf = i; else colTimeTuTh = i;
-          timeSeen++;
-        } else if (v === '장소') {
-          colPlace = i;
-        } else if (v === '이름(월수금)') {
-          colNameMwf = i; nameSeen++;
-        } else if (v === '이름(화목)') {
-          colNameTuTh = i; nameSeen++;
-        } else if (v === '이름' || v.startsWith('이름(')) {
-          if (nameSeen === 0) colNameMwf = i; else colNameTuTh = i;
-          nameSeen++;
-        } else if (v === '요일' || v.startsWith('요일(')) {
-          colDayMwf = i;
-        } else if (v === '비고' || v === '특이사항') {
-          colNote = i;
-        }
-      }
-      continue;
-    }
-
-    if (!currentSection) continue;
-
-    const rawTimeMwf = (row as unknown[])[colTimeMwf];
-    const rawPlace   = cellStr(row, colPlace);
-    const nameMwf    = cellStr(row, colNameMwf);
-    const dayMwf     = cellStr(row, colDayMwf);
-    const rawTimeTuTh = (row as unknown[])[colTimeTuTh];
-    const nameTuTh   = cellStr(row, colNameTuTh);
-    const note       = cellStr(row, colNote);
-
-    // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
-    if (isHeaderValue(nameMwf)) continue;
-    const headerCellCount = [nameMwf, nameTuTh, cellStr(row, colTimeMwf), rawPlace].filter(v => isHeaderValue(String(v))).length;
-    if (headerCellCount >= 2) continue;
-
-    // 시간/장소 승계 (빈 셀이면 이전 값 사용)
-    if (rawTimeMwf != null && rawTimeMwf !== '') lastTimeMwf = formatExcelTime(rawTimeMwf);
-    if (rawPlace) lastPlace = rawPlace;
-
-    const timeMwfStr = lastTimeMwf;
-    const placeStr = lastPlace;
-
-    const hasMwf = nameMwf && !isHeaderValue(nameMwf);
-    const hasTuTh = nameTuTh && !isHeaderValue(nameTuTh);
-
-    // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
-    if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
-      const timeTuThStr = formatExcelTime(rawTimeTuTh);
-      const tuThDay = inferTuThDay(dayMwf, cellStr(row, colTimeTuTh));
-      currentSection.students.push({
-        id: generateId(sheetName, currentSection.name, nameMwf, studentIdx++),
-        name: nameMwf,
-        time: timeMwfStr,
-        place: placeStr,
-        contact: '',
-        note,
-        dayMwf: dayMwf || '매일',
-        timeTuTh: timeTuThStr,
-        dayTuTh: tuThDay,
-        bus: sheetName,
-        section: currentSection.name,
+    // 섹션 헤더를 특정 열(B/A)에 한정하지 않고 행 전체에서 찾는다.
+    // 새 양식처럼 "4시 30분 등원"과 "4시 30분 하원" 표가 같은 행에
+    // 병렬 배치되어도 각 섹션을 독립 컨텍스트로 파싱한다.
+    const headers = findSectionHeaders(row as unknown[]);
+    if (headers.length > 0) {
+      flushContexts();
+      contexts = headers.map((header, index) => {
+        const nextHeader = headers[index + 1];
+        return createSectionContext(header.section, header.col, nextHeader?.col ?? Number.POSITIVE_INFINITY);
       });
       continue;
     }
 
-    // ① 월수금 학생 (D열에 이름이 있는 경우)
-    if (hasMwf) {
-      currentSection.students.push({
-        id: generateId(sheetName, currentSection.name, nameMwf, studentIdx++),
-        name: nameMwf,
-        time: timeMwfStr,
-        place: placeStr,
-        contact: '',
-        note,
-        dayMwf: dayMwf || '매일',
-        timeTuTh: '',
-        dayTuTh: '',
-        bus: sheetName,
-        section: currentSection.name,
-      });
+    if (contexts.length === 0) continue;
+
+    if (contexts.some((ctx) => ctx.headerPending)) {
+      contexts.forEach((ctx) => applyHeaderRow(ctx, row));
+      continue;
     }
 
-    // ② 화목 학생 (G열에 이름이 있는 경우, 다른 이름인 경우만)
-    if (hasTuTh) {
-      const timeTuThStr = formatExcelTime(rawTimeTuTh);
-      const tuThDay = inferTuThDay(dayMwf, cellStr(row, colTimeTuTh));
-
-      currentSection.students.push({
-        id: generateId(sheetName, currentSection.name, nameTuTh, studentIdx++),
-        name: nameTuTh,
-        time: timeTuThStr,
-        place: placeStr,
-        contact: '',
-        note,
-        dayMwf: '',
-        timeTuTh: timeTuThStr,
-        dayTuTh: tuThDay,
-        bus: sheetName,
-        section: currentSection.name,
-      });
-    }
+    contexts.forEach((ctx) => appendStudentsFromRow(sheetName, ctx, row));
   }
 
-  if (currentSection) sections.push(currentSection);
-  return { name: sheetName, sections };
+  flushContexts();
+  return { name: sheetName, sections: normalizeOverlappingSectionDays(mergeSectionsByName(sections)) };
 }
 
 // 개별등하원 시트 파싱 (선택적)
@@ -269,7 +447,7 @@ function parseIndivSheet(rows: unknown[][]): BusData {
     const type = firstCell;
     if (type !== '등원_개별' && type !== '하원_개별') continue;
 
-    const name = cellStr(row, 4);
+    const name = cellName(row, 4);
     if (!name) continue;
 
     const section: SectionType = type === '등원_개별' ? '9시 30분 등원' : '3시 하원';
