@@ -7,6 +7,7 @@ const COOKIE = 'bus_auth';
 export async function POST(req: NextRequest) {
   const { password } = await req.json();
   if (password !== PASSWORD) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     return NextResponse.json({ error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
   const res = NextResponse.json({ ok: true });

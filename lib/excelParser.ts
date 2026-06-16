@@ -4,7 +4,7 @@ import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
 // 파싱 로직이 바뀔 때마다 올려서, 저장된 데이터를 원본 엑셀로부터
 // 자동으로 다시 파싱하도록 트리거한다.
-export const PARSER_VERSION = 4;
+export const PARSER_VERSION = 5;
 
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
@@ -69,7 +69,7 @@ function normalizeOverlappingSectionDays(buses: BusData[]): void {
       if (!mode) continue;
       const priority = ALL_SECTIONS.indexOf(section.name);
       for (const student of section.students) {
-        const key = `${mode}||${normalizeStudentName(student.name)}`;
+        const key = `${mode}||${normalizeStudentName(student.name)}||${student.place}`;
         const entries = entriesByStudent.get(key) ?? [];
         entries.push({ priority, student });
         entriesByStudent.set(key, entries);
@@ -483,7 +483,7 @@ function parseIndivSheet(rows: unknown[][]): BusData {
       name,
       time: formatExcelTime((row as unknown[])[1]),
       place: cellStr(row, 2),
-      contact: cellStr(row, 3),
+      contact: '',
       note: cellStr(row, 8),
       dayMwf: cellStr(row, 5),
       timeTuTh: formatExcelTime((row as unknown[])[6]),

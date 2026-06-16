@@ -17,7 +17,7 @@ interface Props {
   onDelete: (studentId: string, isTemp: boolean, bus: BusName, section: string) => void;
   onAddTemp: (bus: BusName, section: string, student: { name: string; place: string; time: string; note: string }) => void;
   onSetCategory: (studentKey: string, category: StudentCategory) => void;
-  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
+  onDayOverride: (studentKey: string, updates: Record<string, string>) => void;
 }
 
 export default function HoTab({ bus, today, changes, tempStudents, categoryStore, allDayOverrides, onToggle, onDelete, onAddTemp, onSetCategory, onDayOverride }: Props) {
@@ -39,10 +39,7 @@ export default function HoTab({ bus, today, changes, tempStudents, categoryStore
         })
       : [];
     const tempKey = `${bus.name}_${section.name}`;
-    const temps = (tempStudents[tempKey] ?? []).filter((s) => {
-      const key = makeChangeKey(bus.name, section.name, s.id);
-      return !(changes[key] as unknown as string === '__deleted__');
-    });
+    const temps = tempStudents[tempKey] ?? [];
     return { ...section, students: filtered, temps };
   });
 

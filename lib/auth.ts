@@ -18,10 +18,26 @@ export async function createAuthToken(): Promise<string> {
   return `${payload}.${await sign(payload)}`;
 }
 
+async function verifyHmac(payload: string, sigHex: string): Promise<boolean> {
+  if (sigHex.length % 2 !== 0) return false;
+  const sigBytes = new Uint8Array(sigHex.length / 2);
+  for (let i = 0; i < sigHex.length; i += 2) {
+    sigBytes[i / 2] = parseInt(sigHex.slice(i, i + 2), 16);
+  }
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+  return crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payload));
+}
+
 export async function verifyAuthToken(token: string): Promise<boolean> {
   const [payload, sig] = token.split('.');
   if (!payload || !sig) return false;
-  if ((await sign(payload)) !== sig) return false;
+  if (!(await verifyHmac(payload, sig))) return false;
   const [version, expRaw] = payload.split(':');
   const exp = Number(expRaw);
   if (version !== 'v1' || !Number.isFinite(exp)) return false;

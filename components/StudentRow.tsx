@@ -16,7 +16,7 @@ interface Props {
   onToggle: (key: string, state: ChangeState | null) => void;
   onDelete: (studentId: string, isTemp: boolean) => void;
   onSetCategory: (studentKey: string, category: StudentCategory) => void;
-  onDayOverride: (studentKey: string, key: string, newDays: string) => void;
+  onDayOverride: (studentKey: string, updates: Record<string, string>) => void;
   changeKey: string;
   studentKey: string;
 }
@@ -149,18 +149,28 @@ export default function StudentRow({
 
   const isPickupSection = ['9시 30분 등원', '3시 등원', '4시 30분 등원'].includes(section);
 
-  const overrideKey = `${section}||${bus}||${student.dayMwf ? 'mwf' : 'tuth'}`;
-  const isOverridden = overrideKey in dayOverrides;
-  const effectiveDays = isOverridden
-    ? dayOverrides[overrideKey]
-    : (student.dayMwf || student.dayTuTh || '');
+  const mwfKey = `${section}||${bus}||mwf`;
+  const tuthKey = `${section}||${bus}||tuth`;
+  const effectiveMwf = mwfKey in dayOverrides ? dayOverrides[mwfKey] : (student.dayMwf || '');
+  const effectiveTuTh = tuthKey in dayOverrides ? dayOverrides[tuthKey] : (student.dayTuTh || '');
+  const isOverridden = mwfKey in dayOverrides || tuthKey in dayOverrides;
+  // Expand "매일" to explicit chars so matchesDay works when strings are concatenated
+  const expandToChars = (s: string) => s.trim() === '매일' ? '월화수목금' : s;
+  const effectiveDays = expandToChars(effectiveMwf) + expandToChars(effectiveTuTh);
 
   function toggleDay(day: DayOfWeek) {
-    const wasActive = matchesDay(effectiveDays, day);
-    const newDays = DAY_OF_WEEK.filter(d =>
-      d === day ? !wasActive : matchesDay(effectiveDays, d)
-    ).join('');
-    onDayOverride(studentKey, overrideKey, newDays);
+    const inMwf = matchesDay(effectiveMwf, day);
+    const inTuTh = matchesDay(effectiveTuTh, day);
+    const wasActive = inMwf || inTuTh;
+    const updates: Record<string, string> = {};
+    if (wasActive) {
+      if (inMwf) updates[mwfKey] = DAY_OF_WEEK.filter(d => d !== day && matchesDay(effectiveMwf, d)).join('');
+      if (inTuTh) updates[tuthKey] = DAY_OF_WEEK.filter(d => d !== day && matchesDay(effectiveTuTh, d)).join('');
+    } else {
+      if (student.dayMwf) updates[mwfKey] = DAY_OF_WEEK.filter(d => d === day || matchesDay(effectiveMwf, d)).join('');
+      else updates[tuthKey] = DAY_OF_WEEK.filter(d => d === day || matchesDay(effectiveTuTh, d)).join('');
+    }
+    onDayOverride(studentKey, updates);
   }
 
   return (

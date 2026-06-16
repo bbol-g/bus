@@ -157,8 +157,8 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
     persistChanges(next);
   }
 
-  function handleDayOverride(studentKey: string, key: string, newDays: string) {
-    const studentOverrides = { ...(allDayOverrides[studentKey] ?? {}), [key]: newDays };
+  function handleDayOverride(studentKey: string, updates: Record<string, string>) {
+    const studentOverrides = { ...(allDayOverrides[studentKey] ?? {}), ...updates };
     setAllDayOverrides((prev) => ({ ...prev, [studentKey]: studentOverrides }));
     fetch('/api/day-overrides', {
       method: 'POST',

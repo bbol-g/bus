@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(bytes);
     const data = parseExcelBuffer(buffer);
     await writeBase(data);
-    await writeRawExcel(buffer.toString('base64'));
+    await writeRawExcel('');
     // 새 원본 엑셀이므로 이전에 영구 삭제했던 학생 목록은 더 이상 유효하지 않다.
     await writeDeletedStudents([]);
     return NextResponse.json(data);
