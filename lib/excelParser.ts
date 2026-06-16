@@ -4,7 +4,7 @@ import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
 // 파싱 로직이 바뀔 때마다 올려서, 저장된 데이터를 원본 엑셀로부터
 // 자동으로 다시 파싱하도록 트리거한다.
-export const PARSER_VERSION = 3;
+export const PARSER_VERSION = 4;
 
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
@@ -181,6 +181,25 @@ function isDayTimeOnly(v: string): boolean {
   return /^([월화수목금]+\s*\d{1,2}:\d{2}\s*)+$/.test(v);
 }
 
+// 셀 값이 자바스크립트 Date 객체의 toString 결과(예: "Tue Jun 16 2026 ... GMT")인지 판별.
+// 엑셀에서 날짜/시간 셀이 문자열로 흘러들어와 이름 칸으로 잘못 읽히는 경우를 막는다.
+function isDateString(value: string): boolean {
+  return /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(value)
+    && /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(value)
+    && (value.includes('GMT') || value.includes('Coordinated Universal Time'));
+}
+
+// "3:07", "15:00:00", "화 3:07"처럼 시간(또는 요일+시간)만 적힌 값인지 판별.
+function isTimeLikeString(value: string): boolean {
+  return /^\d{1,2}:\d{2}(?::\d{2})?$/.test(value)
+    || /^[월화수목금]\s*\d{1,2}:\d{2}/.test(value);
+}
+
+// 이름 칸에 들어올 수 없는 값(헤더·날짜·시간 문자열)인지 판별.
+function isInvalidNameValue(value: string): boolean {
+  return isHeaderValue(value) || isDateString(value) || isTimeLikeString(value);
+}
+
 interface ColumnMap {
   timeMwf: number;
   place: number;
@@ -300,8 +319,8 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
   // (예: 호차 합승표) 해당 칸은 요일 정보로 쓸 수 없으므로 행을 건너뛴다.
   const isValidDayValue = dayMwf === '' || dayMwf === '매일' || /^[월화수목금]+$/.test(dayMwf);
 
-  const hasMwf = !!nameMwf && !isHeaderValue(nameMwf) && isValidDayValue;
-  const hasTuTh = nameTuTh && !isHeaderValue(nameTuTh) && !isDayTimeOnly(nameTuTh);
+  const hasMwf = !!nameMwf && !isInvalidNameValue(nameMwf) && isValidDayValue;
+  const hasTuTh = nameTuTh && !isInvalidNameValue(nameTuTh) && !isDayTimeOnly(nameTuTh);
 
   // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
   if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
