@@ -14,11 +14,12 @@ interface Entry {
   dayMwf: string;
   dayTuTh: string;
   overrideSlot: 'mwf' | 'tuth';
+  studentKey: string;
 }
 
 interface StudentSchedule {
   name: string;
-  studentKey: string;
+  studentKeys: string[];
   entries: Entry[];
 }
 
@@ -27,17 +28,14 @@ interface Props {
 }
 
 function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
-  let targetId: string | null = null;
-  let targetKey = '';
   const entries: Entry[] = [];
+  const keySet = new Set<string>();
   for (const bus of data.buses) {
     for (const section of bus.sections) {
       for (const s of section.students) {
-        if (s.name === name && targetId === null) {
-          targetId = s.id;
-          targetKey = makeStudentKey(bus.name, section.name, s.id);
-        }
-        if (s.name === name && s.id === targetId) {
+        if (s.name === name) {
+          const sk = makeStudentKey(bus.name, section.name, s.id);
+          keySet.add(sk);
           entries.push({
             bus: bus.name,
             section: section.name,
@@ -46,12 +44,13 @@ function buildSchedule(data: ShuttleBase, name: string): StudentSchedule {
             dayMwf: s.dayMwf,
             dayTuTh: s.dayTuTh,
             overrideSlot: s.dayMwf ? 'mwf' : 'tuth',
+            studentKey: sk,
           });
         }
       }
     }
   }
-  return { name, studentKey: targetKey, entries };
+  return { name, studentKeys: Array.from(keySet), entries };
 }
 
 function applyOverrides(entries: Entry[], overrides: Record<string, string>): Entry[] {
@@ -224,7 +223,10 @@ export default function SearchPanel({ data }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<StudentSchedule | null>(null);
+  // flat map: section||bus||slot → days (merged from all studentKeys)
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  // per-key overrides for correct API writes: studentKey → inner Record
+  const [overridesByKey, setOverridesByKey] = useState<Record<string, Record<string, string>>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const results = useMemo<string[]>(() => {
@@ -245,31 +247,60 @@ export default function SearchPanel({ data }: Props) {
     const schedule = buildSchedule(data, name);
     setSelected(schedule);
     setOverrides({});
+    setOverridesByKey({});
     setOpen(false);
     setQuery('');
-    fetch(`/api/day-overrides?key=${encodeURIComponent(schedule.studentKey)}`)
-      .then(r => r.json())
-      .then((d: Record<string, string>) => setOverrides(d))
-      .catch(() => {});
+
+    // Fetch overrides for all studentKeys in parallel, then merge
+    Promise.all(
+      schedule.studentKeys.map(sk =>
+        fetch(`/api/day-overrides?key=${encodeURIComponent(sk)}`)
+          .then(r => r.ok ? r.json() as Promise<Record<string, string>> : {})
+          .catch(() => ({} as Record<string, string>))
+          .then(d => ({ sk, d }))
+      )
+    ).then(results => {
+      const byKey: Record<string, Record<string, string>> = {};
+      const flat: Record<string, string> = {};
+      for (const { sk, d } of results) {
+        byKey[sk] = d;
+        Object.assign(flat, d);
+      }
+      setOverridesByKey(byKey);
+      setOverrides(flat);
+    });
   }
 
   function handleToggleDayGroup(entries: Entry[], day: DayOfWeek) {
-    let newOverrides = { ...overrides };
+    // Group entries by studentKey
+    const updatesByKey = new Map<string, Record<string, string>>();
     for (const entry of entries) {
-      const key = `${entry.section}||${entry.bus}||${entry.overrideSlot}`;
+      const slotKey = `${entry.section}||${entry.bus}||${entry.overrideSlot}`;
       const currentDays = entry.overrideSlot === 'mwf' ? entry.dayMwf : entry.dayTuTh;
       const wasActive = matchesDay(currentDays, day);
       const newDays = DAY_OF_WEEK.filter(d => d === day ? !wasActive : matchesDay(currentDays, d)).join('');
-      newOverrides = { ...newOverrides, [key]: newDays };
+      const prev = updatesByKey.get(entry.studentKey) ?? {};
+      updatesByKey.set(entry.studentKey, { ...prev, [slotKey]: newDays });
     }
-    setOverrides(newOverrides);
-    if (selected) {
+
+    // Build new flat overrides and new per-key map
+    const newFlat = { ...overrides };
+    const newByKey = { ...overridesByKey };
+    for (const sk of Array.from(updatesByKey.keys())) {
+      const updates = updatesByKey.get(sk)!;
+      const merged = { ...(newByKey[sk] ?? {}), ...updates };
+      newByKey[sk] = merged;
+      Object.assign(newFlat, updates);
+
       fetch('/api/day-overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: selected.studentKey, overrides: newOverrides }),
+        body: JSON.stringify({ key: sk, overrides: merged }),
       }).catch(() => {});
     }
+
+    setOverrides(newFlat);
+    setOverridesByKey(newByKey);
   }
 
   return (
