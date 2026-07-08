@@ -188,6 +188,14 @@ export default function StudentRow({
           {isShuttle && (
             <span className="ml-1.5 inline-block bg-blue-400 text-white text-xs px-1.5 py-0.5 rounded font-semibold">셔틀</span>
           )}
+          {student.needsReview && (
+            <span
+              className="ml-1.5 inline-block bg-amber-100 text-amber-700 border border-amber-300 text-[10px] px-1.5 py-0.5 rounded font-semibold align-middle"
+              title="요일을 자동으로 확정하지 못해 추측했습니다. 요일 배지를 눌러 확인·수정하세요."
+            >
+              검토
+            </span>
+          )}
         </div>
         {student.place && (
           <div className="sm:hidden text-xs text-gray-400 mt-0.5 font-normal truncate max-w-[120px]">{student.place}</div>

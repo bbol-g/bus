@@ -40,6 +40,7 @@ export default function SectionTable({
     return changes[key] === 'absent';
   }).length;
   const activeCount = allStudents.length - absentCount;
+  const reviewCount = allStudents.filter((s) => s.needsReview).length;
 
   return (
     <div className="mb-4">
@@ -52,6 +53,11 @@ export default function SectionTable({
           <span className="text-xs opacity-60">{isPickup ? '등원' : '하원'}</span>
         </div>
         <div className="flex items-center gap-2">
+          {reviewCount > 0 && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+              검토 {reviewCount}
+            </span>
+          )}
           <span className="text-xs font-medium opacity-80">
             {activeCount}명{absentCount > 0 ? ` (결석 ${absentCount})` : ''}
           </span>

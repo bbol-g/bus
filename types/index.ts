@@ -33,6 +33,8 @@ export interface Student {
   section: SectionType;
   isTemp?: boolean;
   type?: '등원_개별' | '하원_개별';
+  // 파서가 요일을 확실히 알 수 없어 추측한 경우 true (UI에서 검토 표시)
+  needsReview?: boolean;
 }
 
 export interface Section {

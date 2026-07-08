@@ -4,7 +4,7 @@ import { ALL_SECTIONS, DROPOFF_SECTIONS, PICKUP_SECTIONS } from '@/types';
 
 // 파싱 로직이 바뀔 때마다 올려서, 저장된 데이터를 원본 엑셀로부터
 // 자동으로 다시 파싱하도록 트리거한다.
-export const PARSER_VERSION = 5;
+export const PARSER_VERSION = 6;
 
 // 호차별 시트 이름
 const BUS_SHEETS: BusName[] = ['1호차', '2호차', '3호차', '5호차', '6호차'];
@@ -123,18 +123,34 @@ function formatExcelTime(val: unknown): string {
   return s;
 }
 
-// 화목 학생의 요일 추론
-// - col4(요일 컬럼)가 화목 패턴이면 그것을 사용
-// - col5(화목 시간)이 '화 3:07' 형태면 '화' 추출
-function inferTuThDay(dayCol: string, timeCol: string): string {
-  // 화목 요일 패턴인 경우
-  if (/^[화목]+$/.test(dayCol)) return dayCol;
-  // 시간 컬럼에 요일 포함 (예: '화 3:07')
-  if (timeCol.startsWith('화') && !timeCol.startsWith('화목')) return '화';
-  if (timeCol.startsWith('목')) return '목';
-  if (timeCol.startsWith('화목')) return '화목';
-  // 기본값
-  return '화목';
+const MWF_SET: readonly string[] = ['월', '수', '금'];
+const TUTH_SET: readonly string[] = ['화', '목'];
+
+// 병합 학생(같은 이름이 월수금·화목 열에 모두 있음)의 탑승 요일을 결정한다.
+// 요일 열(col4)이 이 학생의 "전체 탑승 요일"이므로, 그것을 벗어나 추측하지 않는다.
+// 월수금에 해당하는 요일은 mwf(월수금 시간), 화목에 해당하는 요일은 화목 시간을 쓴다.
+// 요일 열이 비어 있을 때만 '매일'로 가정하고 guessed=true로 표시한다.
+function splitRideDays(dayCol: string): { mwf: string; tuth: string; guessed: boolean } {
+  const trimmed = dayCol.trim();
+  const guessed = trimmed === '';
+  const all = guessed ? new Set(WEEK_DAYS) : expandDayValue(trimmed);
+  const mwf = serializeDays(new Set(WEEK_DAYS.filter((d) => MWF_SET.includes(d) && all.has(d))));
+  const tuth = serializeDays(new Set(WEEK_DAYS.filter((d) => TUTH_SET.includes(d) && all.has(d))));
+  return { mwf, tuth, guessed };
+}
+
+// 화목 단독 학생의 요일을 결정한다.
+// - 요일 열에 화/목이 있으면 그것을 사용(가장 신뢰도 높음)
+// - 없으면 시간 열의 요일 접두사(예: '화 3:07')로 판단
+// - 둘 다 없을 때만 '화목'으로 추측하고 guessed=true로 표시한다.
+function deriveTuThDays(dayCol: string, timeCol: string): { days: string; guessed: boolean } {
+  const fromCol = WEEK_DAYS.filter((d) => TUTH_SET.includes(d) && expandDayValue(dayCol).has(d));
+  if (fromCol.length) return { days: serializeDays(new Set(fromCol)), guessed: false };
+  const t = timeCol.trim();
+  if (t.startsWith('화목')) return { days: '화목', guessed: false };
+  if (t.startsWith('화')) return { days: '화', guessed: false };
+  if (t.startsWith('목')) return { days: '목', guessed: false };
+  return { days: '화목', guessed: true };
 }
 
 // 유니코드 공백(전각·비분리 등) 및 한글 숫자 변형을 정규화
@@ -261,6 +277,7 @@ function applyHeaderRow(ctx: SectionContext, row: unknown[]): void {
   const cells = (row as (string | number | boolean | null | undefined)[]).map(c => String(c ?? '').trim());
   let timeSeen = 0;
   let nameSeen = 0;
+  let sawTuThName = false;
   for (let i = ctx.startCol; i < Math.min(ctx.endCol, cells.length); i++) {
     const v = cells[i];
     if (!v) continue;
@@ -276,9 +293,9 @@ function applyHeaderRow(ctx: SectionContext, row: unknown[]): void {
     } else if (v === '이름(월수금)') {
       ctx.columns.nameMwf = i; nameSeen++;
     } else if (v === '이름(화목)') {
-      ctx.columns.nameTuTh = i; nameSeen++;
+      ctx.columns.nameTuTh = i; nameSeen++; sawTuThName = true;
     } else if (v === '이름' || v.startsWith('이름(')) {
-      if (nameSeen === 0) ctx.columns.nameMwf = i; else ctx.columns.nameTuTh = i;
+      if (nameSeen === 0) ctx.columns.nameMwf = i; else { ctx.columns.nameTuTh = i; sawTuThName = true; }
       nameSeen++;
     } else if (v === '요일' || v.startsWith('요일(')) {
       ctx.columns.dayMwf = i;
@@ -286,6 +303,10 @@ function applyHeaderRow(ctx: SectionContext, row: unknown[]): void {
       ctx.columns.note = i;
     }
   }
+  // 이 섹션 헤더에 '이름(화목)' 열이 없으면(예: 시간·장소·이름·요일·시간·특이사항
+  // 6열 구성), 기본값(startCol+5)이 특이사항 열을 가리켜 메모가 학생으로
+  // 잘못 파싱되는 것을 막기 위해 화목 이름 열을 비활성화한다.
+  if (!sawTuThName) ctx.columns.nameTuTh = -1;
   ctx.headerPending = false;
 }
 
@@ -325,7 +346,7 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
   // 같은 학생이 양쪽 컬럼에 모두 있는 경우: 하나로 합침 (중복 방지)
   if (hasMwf && hasTuTh && nameMwf === nameTuTh) {
     const timeTuThStr = formatExcelTime(rawTimeTuTh);
-    const tuThDay = inferTuThDay(dayMwf, cellInContext(columns.timeTuTh));
+    const { mwf, tuth, guessed } = splitRideDays(dayMwf);
     ctx.section.students.push({
       id: generateId(sheetName, ctx.section.name, nameMwf, ctx.studentIdx++),
       name: nameMwf,
@@ -333,11 +354,12 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
       place: placeStr,
       contact: '',
       note,
-      dayMwf: dayMwf || '매일',
+      dayMwf: mwf,
       timeTuTh: timeTuThStr,
-      dayTuTh: tuThDay,
+      dayTuTh: tuth,
       bus: sheetName,
       section: ctx.section.name,
+      ...(guessed ? { needsReview: true } : {}),
     });
     return;
   }
@@ -356,13 +378,15 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
       dayTuTh: '',
       bus: sheetName,
       section: ctx.section.name,
+      // 요일 열이 비어 '매일'로 가정한 경우 검토 표시
+      ...(dayMwf ? {} : { needsReview: true }),
     });
   }
 
   // ② 화목 학생
   if (hasTuTh) {
     const timeTuThStr = formatExcelTime(rawTimeTuTh);
-    const tuThDay = inferTuThDay(dayMwf, cellInContext(columns.timeTuTh));
+    const { days, guessed } = deriveTuThDays(dayMwf, cellInContext(columns.timeTuTh));
 
     ctx.section.students.push({
       id: generateId(sheetName, ctx.section.name, nameTuTh, ctx.studentIdx++),
@@ -373,10 +397,30 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
       note,
       dayMwf: '',
       timeTuTh: timeTuThStr,
-      dayTuTh: tuThDay,
+      dayTuTh: days,
       bus: sheetName,
       section: ctx.section.name,
+      ...(guessed ? { needsReview: true } : {}),
     });
+  }
+}
+
+// 재업로드 시에도 같은 학생이 같은 id를 갖도록, 파싱이 모두 끝난 뒤
+// 최종 목록 기준으로 id를 재부여한다. id는 순서(idx)가 아니라
+// 호차·섹션·정규화된 이름·동명이인 순번으로 만들어, 엑셀에서 행 순서가
+// 바뀌거나 다른 학생이 추가/삭제되어도 안정적으로 유지된다.
+// (요일 override 등 사용자가 앱에서 수정한 값이 재업로드 후에도 보존됨)
+function assignStableIds(buses: BusData[]): void {
+  for (const bus of buses) {
+    for (const section of bus.sections) {
+      const seq = new Map<string, number>();
+      for (const student of section.students) {
+        const nameKey = normalizeStudentName(student.name);
+        const occ = seq.get(nameKey) ?? 0;
+        seq.set(nameKey, occ + 1);
+        student.id = `${bus.name}||${section.name}||${nameKey}||${occ}`;
+      }
+    }
   }
 }
 
@@ -531,6 +575,9 @@ function parseWorkbook(wb: XLSX.WorkBook): ShuttleBase {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(indivWs, { header: 1, defval: '' });
     buses.push(parseIndivSheet(rows));
   }
+
+  // 파싱 완료 후 안정적 id 재부여 (재업로드 시 사용자 수정사항 보존)
+  assignStableIds(buses);
 
   return {
     buses,
