@@ -8,11 +8,10 @@ import { setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
 import SearchPanel from './SearchPanel';
-import OverviewBoard from './OverviewBoard';
 import InboxModal from './InboxModal';
 import type { PlanOp } from '@/lib/inbox';
 
-type AppMode = 'overview' | 'dropoff' | 'manage';
+type AppMode = 'dropoff' | 'manage';
 type ManageTab = '전체' | BusName;
 
 const CATEGORY_FILTERS: CategoryFilter[] = ['전체', 'MK', 'AK', '초등'];
@@ -304,14 +303,6 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
         <div className="flex">
           <button
-            onClick={() => setMode('overview')}
-            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
-              mode === 'overview' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            한눈에 보기
-          </button>
-          <button
             onClick={() => setMode('dropoff')}
             className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
               mode === 'dropoff' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -329,19 +320,6 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
           </button>
         </div>
       </div>
-
-      {/* ── 한눈에 보기 mode ── */}
-      {mode === 'overview' && (
-        <div className="p-4 max-w-7xl mx-auto">
-          <OverviewBoard
-            data={data}
-            viewDay={viewDay}
-            changes={changes}
-            allDayOverrides={allDayOverrides}
-            dateLabel={formatDate(selectedDate)}
-          />
-        </div>
-      )}
 
       {/* ── 하원 명단 mode ── */}
       {mode === 'dropoff' && (
