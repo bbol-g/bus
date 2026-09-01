@@ -9,6 +9,7 @@ import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
 import SearchPanel from './SearchPanel';
 import InboxModal from './InboxModal';
+import QuickInbox from './QuickInbox';
 import type { PlanOp } from '@/lib/inbox';
 
 type AppMode = 'dropoff' | 'manage';
@@ -278,12 +279,6 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
         <div className="flex items-center gap-2">
           <SearchPanel data={data} />
           <button
-            onClick={() => setShowInbox(true)}
-            className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
-          >
-            📥 인박스
-          </button>
-          <button
             onClick={() => window.print()}
             className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
           >
@@ -320,6 +315,15 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
           </button>
         </div>
       </div>
+
+      {/* 변동사항 빠른 입력 (항상 노출) */}
+      <QuickInbox
+        data={data}
+        allDayOverrides={allDayOverrides}
+        defaultDate={selectedDate}
+        onApply={applyInboxOps}
+        onOpenBulk={() => setShowInbox(true)}
+      />
 
       {/* ── 하원 명단 mode ── */}
       {mode === 'dropoff' && (

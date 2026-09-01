@@ -127,7 +127,9 @@ function detectAction(line: string): { action: ChangeState; direction: Direction
 
 const GROUP_RE = /(오전유치부|오후유치부|오전반|오후반|유치부|초등부|초등|오전|오후)/;
 
-export function parseLine(raw: string, year: number): ParsedIntent {
+// defaultDate(YYYY-MM-DD): 문장에 날짜가 없을 때 이 날짜(보통 현재 보고 있는
+// 날짜)에 적용한다. 빠른 입력 바에서 "김건우 결석"처럼 날짜 없이 넣을 때 사용.
+export function parseLine(raw: string, year: number, defaultDate?: string): ParsedIntent {
   const line = raw.trim();
   if (!line) return { raw, name: '', dates: [], action: 'absent', direction: 'both', error: '빈 줄' };
 
@@ -136,7 +138,12 @@ export function parseLine(raw: string, year: number): ParsedIntent {
     return { raw, name: '', dates: [], action: 'absent', direction: 'both', error: '동작(결석/개별등원/개별하원 등)을 찾지 못함' };
   }
 
-  const { dates, rest: afterDates } = extractDates(line, year);
+  const extracted = extractDates(line, year);
+  const afterDates = extracted.rest;
+  let dates = extracted.dates;
+  if (dates.length === 0 && defaultDate && getDayOfWeekFromStr(defaultDate)) {
+    dates = [defaultDate];
+  }
 
   // 그룹 추출
   let rest = afterDates;
@@ -193,9 +200,10 @@ export function resolveLine(
   raw: string,
   data: ShuttleBase,
   dayOverrides: DayOverrides,
-  year: number
+  year: number,
+  defaultDate?: string
 ): LineResult {
-  const intent = parseLine(raw, year);
+  const intent = parseLine(raw, year, defaultDate);
   if (intent.error) return { intent, ops: [], matched: [] };
 
   const hits = findStudents(data, intent.name);
