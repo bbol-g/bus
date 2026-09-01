@@ -219,6 +219,7 @@ function isInvalidNameValue(value: string): boolean {
 interface ColumnMap {
   timeMwf: number;
   place: number;
+  contact: number;
   nameMwf: number;
   dayMwf: number;
   timeTuTh: number;
@@ -243,6 +244,7 @@ function defaultColumns(startCol: number): ColumnMap {
   return {
     timeMwf: startCol,
     place: startCol + 1,
+    contact: -1, // 연락처 열은 헤더에 '연락처'가 있을 때만 활성화 (구 양식엔 없음)
     nameMwf: startCol + 2,
     dayMwf: startCol + 3,
     timeTuTh: startCol + 4,
@@ -290,9 +292,12 @@ function applyHeaderRow(ctx: SectionContext, row: unknown[]): void {
       timeSeen++;
     } else if (v === '장소') {
       ctx.columns.place = i;
-    } else if (v === '이름(월수금)') {
+    } else if (v === '연락처') {
+      ctx.columns.contact = i;
+    } else if (v === '이름(월수금)' || v === '아동명' || v === '월수금') {
+      // 신양식은 이름 열 머리글로 '아동명'(등원)·'월수금'(등하원)을 쓴다.
       ctx.columns.nameMwf = i; nameSeen++;
-    } else if (v === '이름(화목)') {
+    } else if (v === '이름(화목)' || v === '화목') {
       ctx.columns.nameTuTh = i; nameSeen++; sawTuThName = true;
     } else if (v === '이름' || v.startsWith('이름(')) {
       if (nameSeen === 0) ctx.columns.nameMwf = i; else { ctx.columns.nameTuTh = i; sawTuThName = true; }
@@ -323,6 +328,7 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
   const rawTimeTuTh = rawInContext(columns.timeTuTh);
   const nameTuTh   = cellInContext(columns.nameTuTh);
   const note       = cellInContext(columns.note);
+  const contact    = cellInContext(columns.contact).replace(/\s*\n\s*/g, ' ');
 
   // 헤더 값 혼입 방지: 시간/장소 승계 전에 검사하여 lastTimeMwf/lastPlace 오염 방지
   if (isHeaderValue(nameMwf)) return;
@@ -352,7 +358,7 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
       name: nameMwf,
       time: timeMwfStr,
       place: placeStr,
-      contact: '',
+      contact,
       note,
       dayMwf: mwf,
       timeTuTh: timeTuThStr,
@@ -371,7 +377,7 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
       name: nameMwf,
       time: timeMwfStr,
       place: placeStr,
-      contact: '',
+      contact,
       note,
       dayMwf: dayMwf || '매일',
       timeTuTh: '',
@@ -388,12 +394,18 @@ function appendStudentsFromRow(sheetName: BusName, ctx: SectionContext, row: unk
     const timeTuThStr = formatExcelTime(rawTimeTuTh);
     const { days, guessed } = deriveTuThDays(dayMwf, cellInContext(columns.timeTuTh));
 
+    // 화목 이름 칸에 이름이 아니라 메모("단독승하차" 등)가 잘못 들어간 경우 방지:
+    // 같은 행에 월수금 학생이 이미 있고, 화목 요일 근거(요일 열의 화/목,
+    // 화목 시간)가 전혀 없어 요일을 추측만 한 상황이면 별도 화목 학생을
+    // 만들지 않는다. (실제 화목 학생은 요일 열이나 시간에 화/목 근거가 있음)
+    if (guessed && hasMwf) return;
+
     ctx.section.students.push({
       id: generateId(sheetName, ctx.section.name, nameTuTh, ctx.studentIdx++),
       name: nameTuTh,
       time: timeTuThStr,
       place: placeStr,
-      contact: '',
+      contact,
       note,
       dayMwf: '',
       timeTuTh: timeTuThStr,
@@ -527,7 +539,7 @@ function parseIndivSheet(rows: unknown[][]): BusData {
       name,
       time: formatExcelTime((row as unknown[])[1]),
       place: cellStr(row, 2),
-      contact: '',
+      contact: cellStr(row, 3).replace(/\s*\n\s*/g, ' '),
       note: cellStr(row, 8),
       dayMwf: cellStr(row, 5),
       timeTuTh: formatExcelTime((row as unknown[])[6]),
