@@ -8,8 +8,11 @@ import { setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
 import SearchPanel from './SearchPanel';
+import OverviewBoard from './OverviewBoard';
+import InboxModal from './InboxModal';
+import type { PlanOp } from '@/lib/inbox';
 
-type AppMode = 'dropoff' | 'manage';
+type AppMode = 'overview' | 'dropoff' | 'manage';
 type ManageTab = '전체' | BusName;
 
 const CATEGORY_FILTERS: CategoryFilter[] = ['전체', 'MK', 'AK', '초등'];
@@ -38,6 +41,7 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
   const [categoryStore, setCategoryStore] = useState<CategoryStore>({});
   const [allDayOverrides, setAllDayOverrides] = useState<Record<string, Record<string, string>>>({});
   const [selectedDate, setSelectedDate] = useState(getTodayString);
+  const [showInbox, setShowInbox] = useState(false);
   const todayStr = getTodayString();
   const todayKorean = getTodayKorean();
   const viewDay = getDayOfWeekFromStr(selectedDate);
@@ -167,6 +171,30 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
     }).catch(console.error);
   }
 
+  // 인박스: 문장으로 만든 변경(PlanOp)들을 날짜별로 묶어 저장. 각 날짜의 기존
+  // 변경을 읽어 병합 후 저장하므로 기존 결석/개별 설정을 덮어쓰지 않는다.
+  async function applyInboxOps(ops: PlanOp[]) {
+    const byDate = new Map<string, PlanOp[]>();
+    for (const op of ops) {
+      const arr = byDate.get(op.date) ?? [];
+      arr.push(op);
+      byDate.set(op.date, arr);
+    }
+    for (const [date, dateOps] of Array.from(byDate)) {
+      const existing: DailyChanges = await fetch(`/api/changes?date=${date}`)
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+      const merged: DailyChanges = { ...existing };
+      for (const op of dateOps) merged[op.key] = op.state;
+      await fetch('/api/changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, changes: merged }),
+      });
+      if (date === selectedDate) setChanges(merged);
+    }
+  }
+
   function handleSetCategory(studentKey: string, category: StudentCategory) {
     const next = setStudentCategory(categoryStore, studentKey, category);
     setCategoryStore(next);
@@ -251,6 +279,12 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
         <div className="flex items-center gap-2">
           <SearchPanel data={data} />
           <button
+            onClick={() => setShowInbox(true)}
+            className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+          >
+            📥 인박스
+          </button>
+          <button
             onClick={() => window.print()}
             className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
           >
@@ -270,6 +304,14 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
         <div className="flex">
           <button
+            onClick={() => setMode('overview')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              mode === 'overview' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            한눈에 보기
+          </button>
+          <button
             onClick={() => setMode('dropoff')}
             className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
               mode === 'dropoff' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -287,6 +329,19 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
           </button>
         </div>
       </div>
+
+      {/* ── 한눈에 보기 mode ── */}
+      {mode === 'overview' && (
+        <div className="p-4 max-w-7xl mx-auto">
+          <OverviewBoard
+            data={data}
+            viewDay={viewDay}
+            changes={changes}
+            allDayOverrides={allDayOverrides}
+            dateLabel={formatDate(selectedDate)}
+          />
+        </div>
+      )}
 
       {/* ── 하원 명단 mode ── */}
       {mode === 'dropoff' && (
@@ -400,6 +455,16 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
             )}
           </div>
         </>
+      )}
+
+      {showInbox && (
+        <InboxModal
+          data={data}
+          allDayOverrides={allDayOverrides}
+          year={Number(selectedDate.slice(0, 4))}
+          onClose={() => setShowInbox(false)}
+          onApply={applyInboxOps}
+        />
       )}
     </div>
   );
