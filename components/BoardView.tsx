@@ -245,7 +245,7 @@ export default function BoardView({ data, changes, allDayOverrides, selectedDate
                                   {nm.ko}{nm.en && <span className="text-gray-400 font-normal text-xs"> {nm.en}</span>}
                                   {state && <span className="ml-1 text-[10px] px-1 rounded bg-amber-100 text-amber-700 align-middle">{CHANGE_LABEL[state]}</span>}
                                 </div>
-                                {student.place && <div className="text-xs text-gray-400 truncate">📍 {student.place}</div>}
+                                {student.place && <div className="text-xs text-gray-400 truncate">{student.place}</div>}
                               </div>
                             </div>
                           );
