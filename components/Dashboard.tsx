@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BusName, CategoryFilter, CategoryStore, ChangeState, DailyChanges, DayOfWeek, ShuttleBase, Student, StudentCategory } from '@/types';
 import { BUS_NAMES, DAY_OF_WEEK } from '@/types';
-import { addDaysToStr, formatDate, getDayOfWeekFromStr, getTodayKorean, getTodayString } from '@/lib/dateUtils';
+import { addDaysToStr, formatDate, getDayOfWeekFromStr, getTodayKorean, getTodayString, mondayOf } from '@/lib/dateUtils';
 import { setStudentCategory } from '@/lib/storage';
 import HoTab from './HoTab';
 import DropoffBoard from './DropoffBoard';
@@ -43,6 +43,8 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
   const [allDayOverrides, setAllDayOverrides] = useState<Record<string, Record<string, string>>>({});
   const [selectedDate, setSelectedDate] = useState(getTodayString);
   const [showInbox, setShowInbox] = useState(false);
+  const [confirmed, setConfirmed] = useState<string[]>([]);
+  const [weekCounts, setWeekCounts] = useState<Record<string, number>>({});
   const todayStr = getTodayString();
   const todayKorean = getTodayKorean();
   const viewDay = getDayOfWeekFromStr(selectedDate);
@@ -91,7 +93,20 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
         }
         setTempStudents(temps);
       });
+    fetch(`/api/confirmed?date=${selectedDate}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => [])
+      .then((keys: string[]) => setConfirmed(Array.isArray(keys) ? keys : []));
   }, [selectedDate]);
+
+  const weekMonday = mondayOf(selectedDate);
+  function refreshWeek() {
+    fetch(`/api/changes/week?monday=${weekMonday}`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}))
+      .then((counts: Record<string, number>) => setWeekCounts(counts));
+  }
+  useEffect(refreshWeek, [weekMonday]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function persistChanges(next: DailyChanges) {
     setChanges(next);
@@ -99,7 +114,43 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: selectedDate, changes: next }),
+    })
+      .then(refreshWeek)
+      .catch(console.error);
+  }
+
+  function toggleConfirm(key: string) {
+    const next = confirmed.includes(key) ? confirmed.filter((k) => k !== key) : [...confirmed, key];
+    setConfirmed(next);
+    fetch('/api/confirmed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: selectedDate, keys: next }),
     }).catch(console.error);
+  }
+
+  // 인박스 실행취소: 방금 적용한 ops를 날짜별로 제거
+  async function undoInboxOps(ops: PlanOp[]) {
+    const byDate = new Map<string, PlanOp[]>();
+    for (const op of ops) {
+      const arr = byDate.get(op.date) ?? [];
+      arr.push(op);
+      byDate.set(op.date, arr);
+    }
+    for (const [date, dateOps] of Array.from(byDate)) {
+      const existing: DailyChanges = await fetch(`/api/changes?date=${date}`)
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+      const merged: DailyChanges = { ...existing };
+      for (const op of dateOps) delete merged[op.key];
+      await fetch('/api/changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, changes: merged }),
+      });
+      if (date === selectedDate) setChanges(merged);
+    }
+    refreshWeek();
   }
 
   function handleToggle(key: string, state: ChangeState | null) {
@@ -194,6 +245,7 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
       });
       if (date === selectedDate) setChanges(merged);
     }
+    refreshWeek();
   }
 
   function handleSetCategory(studentKey: string, category: StudentCategory) {
@@ -345,7 +397,12 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
           onApplyInbox={applyInboxOps}
+          onUndoInbox={undoInboxOps}
+          onSetChange={handleToggle}
           onRemoveChange={(key) => handleToggle(key, null)}
+          confirmed={confirmed}
+          onToggleConfirm={toggleConfirm}
+          weekCounts={weekCounts}
         />
       )}
 

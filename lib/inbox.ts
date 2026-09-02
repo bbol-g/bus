@@ -196,6 +196,40 @@ function findStudents(data: ShuttleBase, name: string) {
   return exact.length ? exact : prefix;
 }
 
+// 간단한 편집거리 (오타 후보 추천용)
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[m][n];
+}
+
+// 못 찾은 이름에 대해 가까운 명단 이름 후보를 최대 3개 제안
+function suggestNames(data: ShuttleBase, name: string): string[] {
+  const target = normName(name);
+  if (!target) return [];
+  const seen = new Set<string>();
+  const scored: { name: string; score: number }[] = [];
+  for (const b of data.buses) {
+    for (const sec of b.sections) {
+      for (const st of sec.students) {
+        const korean = st.name.replace(/[a-zA-Z]/g, '').trim();
+        const kk = normName(korean);
+        if (!kk || seen.has(kk)) continue;
+        seen.add(kk);
+        const dist = editDistance(target, kk);
+        const contains = kk.includes(target) || target.includes(kk);
+        const score = contains ? 0.5 : dist;
+        if (contains || dist <= 2) scored.push({ name: korean, score });
+      }
+    }
+  }
+  return scored.sort((a, b) => a.score - b.score).slice(0, 3).map((s) => s.name);
+}
+
 export function resolveLine(
   raw: string,
   data: ShuttleBase,
@@ -208,7 +242,9 @@ export function resolveLine(
 
   const hits = findStudents(data, intent.name);
   if (hits.length === 0) {
-    return { intent, ops: [], matched: [], warning: `'${intent.name}' 이름을 명단에서 찾지 못했습니다` };
+    const sugg = suggestNames(data, intent.name);
+    const extra = sugg.length ? ` — 혹시 ${sugg.join(', ')}?` : '';
+    return { intent, ops: [], matched: [], warning: `'${intent.name}' 이름을 찾지 못했습니다${extra}` };
   }
 
   const targetSections = new Set(sectionsForDirection(intent.direction));

@@ -47,6 +47,15 @@ export function getDayOfWeekFromStr(dateStr: string): DayOfWeek | null {
   return DAY_MAP[dow] ?? null;
 }
 
+// 해당 날짜가 속한 주의 월요일(YYYY-MM-DD). 주말이면 다가오는 주 월요일로.
+export function mondayOf(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dow = date.getUTCDay(); // 0=일 … 6=토
+  const deltaToMonday = dow === 0 ? 1 : 1 - dow;
+  return addDaysToStr(dateStr, deltaToMonday);
+}
+
 export function addDaysToStr(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d + delta));

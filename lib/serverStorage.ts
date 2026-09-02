@@ -64,6 +64,17 @@ export async function writeChanges(date: string, data: unknown): Promise<void> {
   fsWrite(`changes_${date}.json`, data);
 }
 
+// 날짜별 "확인완료" 처리된 변경 키 목록
+export async function readConfirmed(date: string): Promise<string[]> {
+  if (USE_KV) return (await kvGet<string[]>(`confirmed_${date}`)) ?? [];
+  return fsRead<string[]>(`confirmed_${date}.json`, []);
+}
+
+export async function writeConfirmed(date: string, keys: string[]): Promise<void> {
+  if (USE_KV) return kvSet(`confirmed_${date}`, keys);
+  fsWrite(`confirmed_${date}.json`, keys);
+}
+
 export async function readCategories(): Promise<Record<string, string>> {
   if (USE_KV) return (await kvGet<Record<string, string>>('categories')) ?? {};
   return fsRead<Record<string, string>>('categories.json', {});
