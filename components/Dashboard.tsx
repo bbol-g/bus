@@ -10,9 +10,10 @@ import DropoffBoard from './DropoffBoard';
 import SearchPanel from './SearchPanel';
 import InboxModal from './InboxModal';
 import QuickInbox from './QuickInbox';
+import BoardView from './BoardView';
 import type { PlanOp } from '@/lib/inbox';
 
-type AppMode = 'dropoff' | 'manage';
+type AppMode = 'board' | 'dropoff' | 'manage';
 type ManageTab = '전체' | BusName;
 
 const CATEGORY_FILTERS: CategoryFilter[] = ['전체', 'MK', 'AK', '초등'];
@@ -33,7 +34,7 @@ interface Props {
 }
 
 export default function Dashboard({ data, onReupload, onDataChange }: Props) {
-  const [mode, setMode] = useState<AppMode>('manage');
+  const [mode, setMode] = useState<AppMode>('board');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('전체');
   const [manageTab, setManageTab] = useState<ManageTab>('전체');
   const [changes, setChanges] = useState<DailyChanges>({});
@@ -298,6 +299,14 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 print:hidden">
         <div className="flex">
           <button
+            onClick={() => setMode('board')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              mode === 'board' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            운영
+          </button>
+          <button
             onClick={() => setMode('dropoff')}
             className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
               mode === 'dropoff' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -316,14 +325,29 @@ export default function Dashboard({ data, onReupload, onDataChange }: Props) {
         </div>
       </div>
 
-      {/* 변동사항 빠른 입력 (항상 노출) */}
-      <QuickInbox
-        data={data}
-        allDayOverrides={allDayOverrides}
-        defaultDate={selectedDate}
-        onApply={applyInboxOps}
-        onOpenBulk={() => setShowInbox(true)}
-      />
+      {/* 변동사항 빠른 입력 (운영 모드 외에서 노출; 운영 모드엔 자체 입력창 있음) */}
+      {mode !== 'board' && (
+        <QuickInbox
+          data={data}
+          allDayOverrides={allDayOverrides}
+          defaultDate={selectedDate}
+          onApply={applyInboxOps}
+          onOpenBulk={() => setShowInbox(true)}
+        />
+      )}
+
+      {/* ── 운영 (카드 보드) mode ── */}
+      {mode === 'board' && (
+        <BoardView
+          data={data}
+          changes={changes}
+          allDayOverrides={allDayOverrides}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          onApplyInbox={applyInboxOps}
+          onRemoveChange={(key) => handleToggle(key, null)}
+        />
+      )}
 
       {/* ── 하원 명단 mode ── */}
       {mode === 'dropoff' && (
